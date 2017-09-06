@@ -50,21 +50,38 @@ def train(data_type, seq_length, model, saved_model=None,
 
     if load_to_memory:
         # Get data.
-        X, y = data.get_all_sequences_in_memory(batch_size, 'train', data_type, concat)
-        X_test, y_test = data.get_all_sequences_in_memory(batch_size, 'test', data_type, concat)
+        X, y = data.get_all_sequences_in_memory(batch_size,
+                                                'train',
+                                                data_type,
+                                                concat)
+        X_test, y_test = data.get_all_sequences_in_memory(batch_size,
+                                                        'test',
+                                                        data_type,
+                                                        concat)
     else:
         # Get generators.
-        generator = data.frame_generator(batch_size, 'train', data_type, concat)
-        val_generator = data.frame_generator(batch_size, 'test', data_type, concat)
+        generator = data.frame_generator(batch_size,
+                                        'train',
+                                        data_type,
+                                        concat
+                                        )
+        val_generator = data.frame_generator(batch_size,
+                                            'test',
+                                            data_type,
+                                            concat
+                                            )
 
     # Get the model.
-    rm = ResearchModels(len(data.classes), model, seq_length, saved_model)
+    rm = ResearchModels(len(data.classes),
+                        model,
+                        seq_length,
+                        saved_model
+                        )
 
     # Fit!
     if load_to_memory:
         # Use standard fit.
-        rm.model.fit(
-            X,
+        rm.model.fit(X,
             y,
             batch_size=batch_size,
             validation_data=(X_test, y_test),
@@ -90,21 +107,6 @@ def main():
     class_limit = None  # int, can be 1-101 or None
     seq_length = 40
     load_to_memory = True  # pre-load the sequences into memory
-
-    # Chose images or features and image shape based on network.
-    if model == 'conv_3d' or model == 'crnn':
-        data_type = 'images'
-        image_shape = (80, 80, 3)
-        load_to_memory = False
-    else:
-        data_type = 'features'
-        image_shape = None
-
-    # MLP requires flattened features.
-    if model == 'mlp':
-        concat = True
-    else:
-        concat = False
 
     train(data_type, seq_length, model, saved_model=saved_model,
           class_limit=class_limit, concat=concat, image_shape=image_shape,
