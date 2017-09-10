@@ -1,27 +1,34 @@
 """
 Train our RNN on bottlecap or prediction files generated from our CNN.
 """
+import numpy as np
+import tensorflow as tf
+from datetime import datetime
 from keras.callbacks import TensorBoard, ModelCheckpoint, EarlyStopping, CSVLogger
 from models import ResearchModels
 from data import DataSet
+from tensorflow.python.lib.io import file_io
 import time
+import argparse
+import pickle
 
-def train(data_type, seq_length, model, saved_model=None,
-          concat=False, class_limit=None, image_shape=None,
-          load_to_memory=False):
+def train(data_type, seq_length, model, job_dir,
+        saved_model=None, concat=False, class_limit=None,
+        image_shape=None, load_to_memory=False):
+
     # Set variables.
     nb_epoch = 1000
     batch_size = 32
 
     # Helper: Save the model.
     checkpointer = ModelCheckpoint(
-        filepath='./data/checkpoints/' + model + '-' + data_type + \
+        filepath='job_dir' + model + '-' + data_type + \
             '.{epoch:03d}-{val_loss:.3f}.hdf5',
         verbose=1,
         save_best_only=True)
 
     # Helper: TensorBoard
-    tb = TensorBoard(log_dir='./data/logs')
+    tb = TensorBoard(log_dir='../data/logs')
 
     # Helper: Stop when we stop learning.
     early_stopper = EarlyStopping(patience=10)
@@ -35,14 +42,12 @@ def train(data_type, seq_length, model, saved_model=None,
     if image_shape is None:
         data = DataSet(
             seq_length=seq_length,
-            class_limit=class_limit
-        )
+            class_limit=class_limit)
     else:
         data = DataSet(
             seq_length=seq_length,
             class_limit=class_limit,
-            image_shape=image_shape
-        )
+            image_shape=image_shape)
 
     # Get samples per epoch.
     # Multiply by 0.7 to attempt to guess how much of data.data is the train set.
@@ -63,20 +68,17 @@ def train(data_type, seq_length, model, saved_model=None,
         generator = data.frame_generator(batch_size,
                                         'train',
                                         data_type,
-                                        concat
-                                        )
+                                        concat)
         val_generator = data.frame_generator(batch_size,
                                             'test',
                                             data_type,
-                                            concat
-                                            )
+                                            concat)
 
     # Get the model.
     rm = ResearchModels(len(data.classes),
                         model,
                         seq_length,
-                        saved_model
-                        )
+                        saved_model)
 
     # Fit!
     if load_to_memory:
@@ -102,15 +104,30 @@ def train(data_type, seq_length, model, saved_model=None,
 def main():
     """These are the main training settings. Set each before running
     this file."""
-    model = 'lstm'  # see `models.py` for more
-    saved_model = None  # None or weights file
-    class_limit = None  # int, can be 1-101 or None
+    model = 'lstm'
+    data_type = 'features'
+    saved_model = None
+    class_limit = None
     seq_length = 40
-    load_to_memory = True  # pre-load the sequences into memory
+    load_to_memory = True
 
-    train(data_type, seq_length, model, saved_model=saved_model,
-          class_limit=class_limit, concat=concat, image_shape=image_shape,
-          load_to_memory=load_to_memory)
+    parser = argparse.ArgumentParser()
+
+    parser.add_argument('--training-set',
+            help='cloud or local path to training data',
+            required=True)
+
+    parser.add_argument('--job-dir',
+            help='cloud location to write checkpoints',
+            required=True)
+
+    args = parser.parse_args()
+    arguments = args.__dict__
+    job_dir = arguments.pop('job_dir')
+
+    train(data_type, seq_length, model='lstm', job_dir=job_dir,
+        class_limit=class_limit, concat=False,
+        load_to_memory=load_to_memory)
 
 if __name__ == '__main__':
     main()
