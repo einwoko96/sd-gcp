@@ -2,132 +2,146 @@
 Train our RNN on bottlecap or prediction files generated from our CNN.
 """
 import numpy as np
+import pandas as pd
 import tensorflow as tf
-from datetime import datetime
-from keras.callbacks import TensorBoard, ModelCheckpoint, EarlyStopping, CSVLogger
-from models import ResearchModels
-from data import DataSet
+import cPickle as pickle
+from tqdm import tqdm
 from tensorflow.python.lib.io import file_io
+from datetime import datetime
+from keras.layers import Dense, Flatten, Dropout
+from keras.layers.recurrent import LSTM
+from keras.models import Sequential, load_model
+from keras.optimizers import Adam
+from keras.callbacks import TensorBoard, ModelCheckpoint, EarlyStopping, CSVLogger
+from keras.utils import np_utils
 import time
 import argparse
-import pickle
+import csv
 
-def train(data_type, seq_length, model, job_dir,
-        saved_model=None, concat=False, class_limit=None,
-        image_shape=None, load_to_memory=False):
+def train(seq_length, job_type='local'):
 
-    # Set variables.
+    # Set variables
     nb_epoch = 1000
     batch_size = 32
-
-    # Helper: Save the model.
-    checkpointer = ModelCheckpoint(
-        filepath='job_dir' + model + '-' + data_type + \
-            '.{epoch:03d}-{val_loss:.3f}.hdf5',
-        verbose=1,
-        save_best_only=True)
-
-    # Helper: TensorBoard
-    tb = TensorBoard(log_dir='../data/logs')
-
-    # Helper: Stop when we stop learning.
-    early_stopper = EarlyStopping(patience=10)
-
-    # Helper: Save results.
     timestamp = time.time()
-    csv_logger = CSVLogger('./data/logs/' + model + '-' + 'training-' + \
-        str(timestamp) + '.log')
 
-    # Get the data and process it.
-    if image_shape is None:
-        data = DataSet(
-            seq_length=seq_length,
-            class_limit=class_limit)
+    # Open files from cloud or locally for data file and training set
+    if job_type == 'cloud':
+        checkpointer = ModelCheckpoint(filepath='gs://sd-training/checkpoints/{epoch:03d}-{val_loss:.3f}.hdf5',
+                verbose=1, save_best_only=True)
+        tb = TensorBoard(log_dir='gs://sd-training/logs/tb')
+        csv_logger = CSVLogger('gs://sd-training/logs/csv' + str(timestamp) + '.log')
+        df = file_io.FileIO('gs://sd-training/data.csv', 'r')
+        v = file_io.FileIO('gs://sd-training/features.pickle', 'r')
     else:
-        data = DataSet(
-            seq_length=seq_length,
-            class_limit=class_limit,
-            image_shape=image_shape)
+        checkpointer = ModelCheckpoint(filepath='./checkpoints/{epoch:03d}-{val_loss:.3f}.hdf5',
+                verbose=1, save_best_only=True)
+        tb = TensorBoard(log_dir='./logs/tb')
+        csv_logger = CSVLogger('./logs/csv' + str(timestamp) + '.log')
+        df = open('data_file.csv','r')
+        v = open('features.pickle', 'rb')
 
-    # Get samples per epoch.
-    # Multiply by 0.7 to attempt to guess how much of data.data is the train set.
-    steps_per_epoch = (len(data.data) * 0.7) // batch_size
+    early_stopper = EarlyStopping(patience=10)
+    data_info = list(csv.reader(df))
+    classes = get_classes(data_info)
 
-    if load_to_memory:
-        # Get data.
-        X, y = data.get_all_sequences_in_memory(batch_size,
-                                                'train',
-                                                data_type,
-                                                concat)
-        X_test, y_test = data.get_all_sequences_in_memory(batch_size,
-                                                        'test',
-                                                        data_type,
-                                                        concat)
-    else:
-        # Get generators.
-        generator = data.frame_generator(batch_size,
-                                        'train',
-                                        data_type,
-                                        concat)
-        val_generator = data.frame_generator(batch_size,
-                                            'test',
-                                            data_type,
-                                            concat)
+    print str(len(classes)) + " classes, " + str(len(data_info)) + " vectors listed. Loading into memory."
 
-    # Get the model.
-    rm = ResearchModels(len(data.classes),
-                        model,
-                        seq_length,
-                        saved_model)
+    # Load data from pickle into memory
+    X = []
+    y = []
+    X_test = []
+    y_test = []
+    num_test = 0
+    num_train = 0
+    prog = tqdm(total=len(data_info))
+    while True:
+        try:
+            vector = pickle.load(v)
+            for item in data_info:
+                if vector[0] in item and 'train' in item:
+                    X.append(vector[1].values)
+                    y.append(get_class_one_hot(classes, vector[0].split('_')[1]))
+                    num_train += 1
+                    break
+                elif vector[0] in item and 'test' in item:
+                    X_test.append(vector[1].values)
+                    y_test.append(get_class_one_hot(classes, vector[0].split('_')[1]))
+                    num_test += 1
+                    break
+        except EOFError:
+            break
+        prog.update()
 
-    # Fit!
-    if load_to_memory:
-        # Use standard fit.
-        rm.model.fit(X,
-            y,
-            batch_size=batch_size,
-            validation_data=(X_test, y_test),
-            verbose=1,
-            callbacks=[checkpointer, tb, early_stopper, csv_logger],
-            epochs=nb_epoch)
-    else:
-        # Use fit generator.
-        rm.model.fit_generator(
-            generator=generator,
+    prog.close()
+
+    print str(num_train) + " actual vectors unpickled in train set"
+    print str(num_test) + " actual vectors unpickled into test set"
+    print "Building lstm of seq_length " + str(seq_length)
+
+    rm = build_lstm(len(classes), seq_length)
+
+    print "Fitting..."
+
+    rm.fit_generator(generator=generator,
             steps_per_epoch=steps_per_epoch,
-            epochs=nb_epoch,
+            epochs=nb_epochs,
             verbose=1,
             callbacks=[checkpointer, tb, early_stopper, csv_logger],
             validation_data=val_generator,
             validation_steps=10)
 
+    rm.fit(np.array(X), np.array(y),
+        batch_size=batch_size,
+        validation_data=(np.array(X_test), np.array(y_test)),
+        verbose=1,
+        callbacks=[checkpointer, tb, early_stopper, csv_logger],
+        epochs=nb_epoch)
+
+def get_class_one_hot(classes, class_str):
+    label_encoded = classes.index(class_str.lower())
+    label_hot = np_utils.to_categorical(label_encoded, len(classes))
+    label_hot = label_hot[0]
+    return label_hot
+
+def get_classes(data):
+    classes = []
+    for item in data:
+        if item[1].lower() not in classes:
+            classes.append(item[1].lower())
+    classes = sorted(classes)
+    return classes
+
+def build_lstm(nb_classes, seq_length):
+    model = Sequential()
+    model.add(LSTM(2048,
+        return_sequences=True,
+        input_shape=(seq_length, 2048),
+        dropout=0.5))
+    model.add(Flatten())
+    model.add(Dense(512, activation='relu'))
+    model.add(Dropout(0.5))
+    model.add(Dense(nb_classes, activation='softmax'))
+    optimizer = Adam(lr=1e-6)
+    model.compile(loss='categorical_crossentropy',
+                    optimizer=optimizer,
+                    metrics=['accuracy','top_k_categorical_accuracy'])
+    return model
+
 def main():
-    """These are the main training settings. Set each before running
-    this file."""
-    model = 'lstm'
-    data_type = 'features'
-    saved_model = None
-    class_limit = None
     seq_length = 40
-    load_to_memory = True
 
     parser = argparse.ArgumentParser()
 
-    parser.add_argument('--training-set',
-            help='cloud or local path to training data',
-            required=True)
-
-    parser.add_argument('--job-dir',
-            help='cloud location to write checkpoints',
+    parser.add_argument('-m',
+            help='cloud or local training data',
             required=True)
 
     args = parser.parse_args()
     arguments = args.__dict__
-    job_dir = arguments.pop('job_dir')
+    job_type = arguments.pop('m')
 
-    train(data_type, seq_length, model='lstm', job_dir=job_dir,
-        class_limit=class_limit, concat=False,
-        load_to_memory=load_to_memory)
+    train(seq_length, job_type=job_type)
 
 if __name__ == '__main__':
     main()
