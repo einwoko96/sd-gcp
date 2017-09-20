@@ -5,6 +5,9 @@ import numpy as np
 import pandas as pd
 import tensorflow as tf
 import cPickle as pickle
+import time
+import csv
+import sys
 from tqdm import tqdm
 from tensorflow.python.lib.io import file_io
 from datetime import datetime
@@ -14,15 +17,12 @@ from keras.models import Sequential, load_model
 from keras.optimizers import Adam
 from keras.callbacks import TensorBoard, ModelCheckpoint, EarlyStopping, CSVLogger
 from keras.utils import np_utils
-import time
-import argparse
-import csv
 
 def train(seq_length, job_type='local'):
 
     # Set variables
     nb_epoch = 1000
-    batch_size = 32
+    batch_size = 12
     timestamp = time.time()
 
     # Open files from cloud or locally for data file and training set
@@ -39,13 +39,15 @@ def train(seq_length, job_type='local'):
         tb = TensorBoard(log_dir='./logs/tb')
         csv_logger = CSVLogger('./logs/csv' + str(timestamp) + '.log')
         df = open('data_file.csv','r')
-        v = open('features.pickle', 'rb')
+        train_p = open('training.pickle', 'rb')
+        validation_p = open('validation.pickle', 'rb')
 
     early_stopper = EarlyStopping(patience=10)
     data_info = list(csv.reader(df))
     classes = get_classes(data_info)
 
-    print str(len(classes)) + " classes, " + str(len(data_info)) + " vectors listed. Loading into memory."
+    print str(len(classes)) + " classes, " + str(len(data_info)) + " vectors listed"
+    print "Unpickling and loading data into memory"
 
     # Load data from pickle into memory
     X = []
@@ -55,25 +57,29 @@ def train(seq_length, job_type='local'):
     num_test = 0
     num_train = 0
     prog = tqdm(total=len(data_info))
+
     while True:
         try:
-            vector = pickle.load(v)
-            for item in data_info:
-                if vector[0] in item and 'train' in item:
-                    X.append(vector[1].values)
-                    y.append(get_class_one_hot(classes, vector[0].split('_')[1]))
-                    num_train += 1
-                    break
-                elif vector[0] in item and 'test' in item:
-                    X_test.append(vector[1].values)
-                    y_test.append(get_class_one_hot(classes, vector[0].split('_')[1]))
-                    num_test += 1
-                    break
+            vector = pickle.load(train_p)
+            X.append(vector[1].values)
+            y.append(get_class_one_hot(classes, vector[0].split('_')[1]))
+            num_train += 1
+        except EOFError:
+            break
+        prog.update()
+
+    while True:
+        try:
+            vector = pickle.load(validation_p)
+            X_test.append(vector[1].values)
+            y_test.append(get_class_one_hot(classes, vector[0].split('_')[1]))
+            num_test += 1
         except EOFError:
             break
         prog.update()
 
     prog.close()
+
 
     print str(num_train) + " actual vectors unpickled in train set"
     print str(num_test) + " actual vectors unpickled into test set"
@@ -82,14 +88,6 @@ def train(seq_length, job_type='local'):
     rm = build_lstm(len(classes), seq_length)
 
     print "Fitting..."
-
-    rm.fit_generator(generator=generator,
-            steps_per_epoch=steps_per_epoch,
-            epochs=nb_epochs,
-            verbose=1,
-            callbacks=[checkpointer, tb, early_stopper, csv_logger],
-            validation_data=val_generator,
-            validation_steps=10)
 
     rm.fit(np.array(X), np.array(y),
         batch_size=batch_size,
@@ -130,17 +128,10 @@ def build_lstm(nb_classes, seq_length):
 
 def main():
     seq_length = 40
+    job_type = sys.argv[1]
 
-    parser = argparse.ArgumentParser()
-
-    parser.add_argument('-m',
-            help='cloud or local training data',
-            required=True)
-
-    args = parser.parse_args()
-    arguments = args.__dict__
-    job_type = arguments.pop('m')
-
+    print "Starting " + job_type + " job."
+    
     train(seq_length, job_type=job_type)
 
 if __name__ == '__main__':
