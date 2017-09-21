@@ -1,3 +1,4 @@
 trainingInput:
-  scaleTier: BASIC_GPU
+  scaleTier: CUSTOM
+  masterType: large_model
   runtimeVersion: "1.2"

@@ -25,17 +25,17 @@ def train(seq_length, job_type='local'):
 
     # Set variables
     nb_epoch = 1000
-    batch_size = 12
     timestamp = time.time()
     model_name = "trained-" + str(timestamp) + ".hdf5"
-
+    early_stopper = EarlyStopping(patience=10)
 
     # Open files from cloud or locally for data file and training set
     if job_type == 'cloud':
-        checkpointer = ModelCheckpoint(filepath='gs://lstm-training/checkpoints/{epoch:03d}-{val_loss:.3f}.hdf5',
-                verbose=1, save_best_only=True)
+        #checkpointer = ModelCheckpoint(filepath='gs://lstm-training/checkpoints/{epoch:03d}-{val_loss:.3f}.hdf5',
+        #        verbose=1, save_best_only=True)
         tb = TensorBoard(log_dir='gs://lstm-training/logs/tb')
-        csv_logger = CSVLogger('gs://lstm-training/logs/csv' + str(timestamp) + '.log')
+        #csv_logger = CSVLogger('gs://lstm-training/logs/csv' + str(timestamp) + '.log')
+        callbacks = [early_stopper, tb]
         df = file_io.FileIO('gs://lstm-training/data_file.csv', 'r')
         train_p = file_io.FileIO('gs://lstm-training/training.pickle', 'r')
         validation_p = file_io.FileIO('gs://lstm-training/validation.pickle', 'r')
@@ -45,12 +45,12 @@ def train(seq_length, job_type='local'):
                 verbose=1, save_best_only=True)
         tb = TensorBoard(log_dir=abs_path + 'logs/tb')
         csv_logger = CSVLogger('logs/csv' + str(timestamp) + '.log')
+        callbacks = [checkpointer, tb, early_stopper, csv_logger]
         df = open(abs_path + 'data_file.csv','r')
         train_p = open(abs_path + 'training.pickle', 'rb')
         validation_p = open(abs_path + 'validation.pickle', 'rb')
         batch_size = 12
 
-    early_stopper = EarlyStopping(patience=10)
     data_info = list(csv.reader(df))
     classes = get_classes(data_info)
 
@@ -96,13 +96,15 @@ def train(seq_length, job_type='local'):
 
     rm = build_lstm(len(classes), seq_length)
 
+    print "Estimated model memory usage: " + str(get_model_memory_usage(batch_size, rm))
+
     print "Beginning model fit."
 
     history = rm.fit(np.array(X), np.array(y),
         batch_size=batch_size,
         validation_data=(np.array(X_test), np.array(y_test)),
         verbose=1,
-        callbacks=[checkpointer, tb, early_stopper, csv_logger],
+        callbacks=callbacks,
         epochs=nb_epoch)
 
     score = rm.evaluate(X_test, y_test, verbose=1)
@@ -143,6 +145,26 @@ def build_lstm(nb_classes, seq_length):
                     optimizer=optimizer,
                     metrics=['accuracy','top_k_categorical_accuracy'])
     return model
+
+# From https://stackoverflow.com/questions/43137288/how-to-determine-needed-memory-of-keras-model
+def get_model_memory_usage(batch_size, model):
+    from keras import backend as K
+
+    shapes_mem_count = 0
+    for l in model.layers:
+        single_layer_mem = 1
+        for s in l.output_shape:
+            if s is None:
+                continue
+            single_layer_mem *= s
+        shapes_mem_count += single_layer_mem
+
+    trainable_count = int(np.sum([K.count_params(p) for p in set(model.trainable_weights)]))
+    non_trainable_count = int(np.sum([K.count_params(p) for p in set(model.non_trainable_weights)]))
+
+    total_memory = 4*batch_size*(shapes_mem_count + trainable_count + non_trainable_count)
+    gbytes = round(total_memory / (1024 ** 3), 3)
+    return gbytes
 
 if __name__ == '__main__':
     seq_length = 40
