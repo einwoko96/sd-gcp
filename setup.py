@@ -10,6 +10,8 @@ setup(name='train.py',
   license='MIT',
   install_requires=[
       'keras',
-      'h5py'
+      'h5py',
+      'tqdm',
+      'pandas'
   ],
   zip_safe=False)
