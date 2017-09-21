@@ -12,6 +12,6 @@ setup(name='train.py',
       'keras',
       'h5py',
       'tqdm',
-      'pandas'
+      'pandas>=0.20.3'
   ],
   zip_safe=False)

@@ -8,7 +8,7 @@ export REGION=us-east1
 
 gcloud ml-engine jobs submit training ${JOB_NAME} \
 	--job-dir gs://${BUCKET_NAME} \
-	--runtime-version 1.0 \
+	--runtime-version 1.2 \
 	--module-name trainer.train \
 	--package-path ./trainer \
 	--region ${REGION} \
