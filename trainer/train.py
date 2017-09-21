@@ -8,6 +8,7 @@ import cPickle as pickle
 import time
 import csv
 import sys
+import os.path
 from tqdm import tqdm
 from tensorflow.python.lib.io import file_io
 from datetime import datetime
@@ -18,34 +19,42 @@ from keras.optimizers import Adam
 from keras.callbacks import TensorBoard, ModelCheckpoint, EarlyStopping, CSVLogger
 from keras.utils import np_utils
 
+abs_path = "/home/freeman/Documents/sd-gcp/"
+
 def train(seq_length, job_type='local'):
 
     # Set variables
     nb_epoch = 1000
     batch_size = 12
     timestamp = time.time()
+    model_name = "trained-" + str(timestamp) + ".hdf5"
+
 
     # Open files from cloud or locally for data file and training set
     if job_type == 'cloud':
-        checkpointer = ModelCheckpoint(filepath='gs://sd-training/checkpoints/{epoch:03d}-{val_loss:.3f}.hdf5',
+        checkpointer = ModelCheckpoint(filepath='gs://lstm-training/checkpoints/{epoch:03d}-{val_loss:.3f}.hdf5',
                 verbose=1, save_best_only=True)
-        tb = TensorBoard(log_dir='gs://sd-training/logs/tb')
-        csv_logger = CSVLogger('gs://sd-training/logs/csv' + str(timestamp) + '.log')
-        df = file_io.FileIO('gs://sd-training/data.csv', 'r')
-        v = file_io.FileIO('gs://sd-training/features.pickle', 'r')
+        tb = TensorBoard(log_dir='gs://lstm-training/logs/tb')
+        csv_logger = CSVLogger('gs://lstm-training/logs/csv' + str(timestamp) + '.log')
+        df = file_io.FileIO('gs://lstm-training/data.csv', 'r')
+        train_p = file_io.FileIO('gs://lstm-training/training.pickle', 'rb')
+        validation_p = file_io.FileIO('gs://lstm-training/validation.pickle', 'rb')
+        batch_size = 32
     else:
-        checkpointer = ModelCheckpoint(filepath='./checkpoints/{epoch:03d}-{val_loss:.3f}.hdf5',
+        checkpointer = ModelCheckpoint(filepath=abs_path + 'checkpoints/{epoch:03d}-{val_loss:.3f}.hdf5',
                 verbose=1, save_best_only=True)
-        tb = TensorBoard(log_dir='./logs/tb')
-        csv_logger = CSVLogger('./logs/csv' + str(timestamp) + '.log')
-        df = open('data_file.csv','r')
-        train_p = open('training.pickle', 'rb')
-        validation_p = open('validation.pickle', 'rb')
+        tb = TensorBoard(log_dir=abs_path + 'logs/tb')
+        csv_logger = CSVLogger('logs/csv' + str(timestamp) + '.log')
+        df = open(abs_path + 'data_file.csv','r')
+        train_p = open(abs_path + 'training.pickle', 'rb')
+        validation_p = open(abs_path + 'validation.pickle', 'rb')
+        batch_size = 12
 
     early_stopper = EarlyStopping(patience=10)
     data_info = list(csv.reader(df))
     classes = get_classes(data_info)
 
+    print "Using batch size " + str(batch_size)
     print str(len(classes)) + " classes, " + str(len(data_info)) + " vectors listed"
     print "Unpickling and loading data into memory"
 
@@ -82,19 +91,27 @@ def train(seq_length, job_type='local'):
 
 
     print str(num_train) + " actual vectors unpickled in train set"
-    print str(num_test) + " actual vectors unpickled into test set"
+    print str(num_test) + " actual vectors unpickled in test set"
     print "Building lstm of seq_length " + str(seq_length)
 
     rm = build_lstm(len(classes), seq_length)
 
-    print "Fitting..."
+    print "Beginning model fit."
 
-    rm.fit(np.array(X), np.array(y),
+    history = rm.fit(np.array(X), np.array(y),
         batch_size=batch_size,
         validation_data=(np.array(X_test), np.array(y_test)),
         verbose=1,
         callbacks=[checkpointer, tb, early_stopper, csv_logger],
         epochs=nb_epoch)
+
+    score = rm.evaluate(X_test, y_test, verbose=1)
+    rm.save(model_name)
+    
+    if job_type == 'cloud':
+        with file_io.FileIO('model_name', mode='r') as in_f:
+            with file_io.FileIO('gs://sd-training/' + model_name, mode = 'w+') as out_f:
+                out_f.write(in_f.read())
 
 def get_class_one_hot(classes, class_str):
     label_encoded = classes.index(class_str.lower())
@@ -120,19 +137,15 @@ def build_lstm(nb_classes, seq_length):
     model.add(Dense(512, activation='relu'))
     model.add(Dropout(0.5))
     model.add(Dense(nb_classes, activation='softmax'))
+    model.summary()
     optimizer = Adam(lr=1e-6)
     model.compile(loss='categorical_crossentropy',
                     optimizer=optimizer,
                     metrics=['accuracy','top_k_categorical_accuracy'])
     return model
 
-def main():
+if __name__ == '__main__':
     seq_length = 40
     job_type = sys.argv[1]
-
     print "Starting " + job_type + " job."
-    
     train(seq_length, job_type=job_type)
-
-if __name__ == '__main__':
-    main()
