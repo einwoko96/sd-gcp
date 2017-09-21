@@ -36,7 +36,7 @@ def train(seq_length, job_type='local'):
                 verbose=1, save_best_only=True)
         tb = TensorBoard(log_dir='gs://lstm-training/logs/tb')
         csv_logger = CSVLogger('gs://lstm-training/logs/csv' + str(timestamp) + '.log')
-        df = file_io.FileIO('gs://lstm-training/data.csv', 'r')
+        df = file_io.FileIO('gs://lstm-training/data_file.csv', 'r')
         train_p = file_io.FileIO('gs://lstm-training/training.pickle', 'r')
         validation_p = file_io.FileIO('gs://lstm-training/validation.pickle', 'r')
         batch_size = 32
