@@ -4,10 +4,12 @@ Train our RNN on bottlecap or prediction files generated from our CNN.
 import numpy as np
 import pandas as pd
 import tensorflow as tf
-import cPickle as pickle
+import tables
 import time
 import csv
 import sys
+import argparse
+import random
 import os.path
 from tqdm import tqdm
 from tensorflow.python.lib.io import file_io
@@ -19,12 +21,11 @@ from keras.optimizers import Adam
 from keras.callbacks import TensorBoard, ModelCheckpoint, EarlyStopping, CSVLogger
 from keras.utils import np_utils
 
-abs_path = "/home/freeman/Documents/sd-gcp/"
-
-def train(seq_length, job_type='local'):
+def train(seq_length, job_dir, job_type='local'):
 
     # Set variables
     nb_epoch = 1000
+    batch_size = 32
     timestamp = time.time()
     model_name = "trained-" + str(timestamp) + ".hdf5"
     early_stopper = EarlyStopping(patience=10)
@@ -33,81 +34,54 @@ def train(seq_length, job_type='local'):
     if job_type == 'cloud':
         #checkpointer = ModelCheckpoint(filepath='gs://lstm-training/checkpoints/{epoch:03d}-{val_loss:.3f}.hdf5',
         #        verbose=1, save_best_only=True)
-        tb = TensorBoard(log_dir='gs://lstm-training/logs/tb')
+        tb = TensorBoard(log_dir=job_dir + '/logs/tb')
         #csv_logger = CSVLogger('gs://lstm-training/logs/csv' + str(timestamp) + '.log')
         callbacks = [early_stopper, tb]
-        df = file_io.FileIO('gs://lstm-training/data_file.csv', 'r')
-        train_p = file_io.FileIO('gs://lstm-training/training.pickle', 'r')
-        validation_p = file_io.FileIO('gs://lstm-training/validation.pickle', 'r')
-        batch_size = 32
+        df = file_io.FileIO(job_dir + '/data_file.csv', 'r')
+        training_set = file_io.FileIO(job_dir + '/training.hdf5', 'r')
+        testing_set = file_io.FileIO(job_dir + '/validation.hdf5', 'r')
     else:
-        checkpointer = ModelCheckpoint(filepath=abs_path + 'checkpoints/{epoch:03d}-{val_loss:.3f}.hdf5',
+        checkpointer = ModelCheckpoint(filepath=job_dir + '/checkpoints/{epoch:03d}-{val_loss:.3f}.hdf5',
                 verbose=1, save_best_only=True)
-        tb = TensorBoard(log_dir=abs_path + 'logs/tb')
-        csv_logger = CSVLogger('logs/csv' + str(timestamp) + '.log')
+        tb = TensorBoard(log_dir=job_dir + '/logs/tb')
+        csv_logger = CSVLogger(job_dir + '/logs/csv' + str(timestamp) + '.log')
         callbacks = [checkpointer, tb, early_stopper, csv_logger]
-        df = open(abs_path + 'data_file.csv','r')
-        train_p = open(abs_path + 'training.pickle', 'rb')
-        validation_p = open(abs_path + 'validation.pickle', 'rb')
-        batch_size = 12
+        df = open(job_dir + '/data_file.csv','r')
+        training_set = 'training.hdf5'
+        testing_set = 'validation.hdf5'
 
     data_info = list(csv.reader(df))
     classes = get_classes(data_info)
+    training_list, testing_list = separate_classes(data_info)
+    steps_per_epoch = (len(data_info) * 0.7) // batch_size
 
-    print "Using batch size " + str(batch_size)
+    training_gen = sequence_generator(training_set, 
+            training_list, 
+            classes,
+            batch_size)
+    validation_gen = sequence_generator(testing_set,
+            testing_list,
+            classes,
+            batch_size)
+
     print str(len(classes)) + " classes, " + str(len(data_info)) + " vectors listed"
-    print "Unpickling and loading data into memory"
-
-    # Load data from pickle into memory
-    X = []
-    y = []
-    X_test = []
-    y_test = []
-    num_test = 0
-    num_train = 0
-    prog = tqdm(total=len(data_info))
-
-    while True:
-        try:
-            vector = pickle.load(train_p)
-            X.append(vector[1].values)
-            y.append(get_class_one_hot(classes, vector[0].split('_')[1]))
-            num_train += 1
-        except EOFError:
-            break
-        prog.update()
-
-    while True:
-        try:
-            vector = pickle.load(validation_p)
-            X_test.append(vector[1].values)
-            y_test.append(get_class_one_hot(classes, vector[0].split('_')[1]))
-            num_test += 1
-        except EOFError:
-            break
-        prog.update()
-
-    prog.close()
-
-
-    print str(num_train) + " actual vectors unpickled in train set"
-    print str(num_test) + " actual vectors unpickled in test set"
     print "Building lstm of seq_length " + str(seq_length)
 
     rm = build_lstm(len(classes), seq_length)
 
     print "Estimated model memory usage: " + str(get_model_memory_usage(batch_size, rm))
+    print "Starting fit_generator."
 
-    print "Beginning model fit."
+    hist = rm.fit_generator(
+            generator=training_gen,
+            steps_per_epoch=steps_per_epoch,
+            epochs=nb_epoch,
+            verbose=1,
+            callbacks=callbacks,
+            validation_data=validation_gen,
+            validation_steps=10)
 
-    history = rm.fit(np.array(X), np.array(y),
-        batch_size=batch_size,
-        validation_data=(np.array(X_test), np.array(y_test)),
-        verbose=1,
-        callbacks=callbacks,
-        epochs=nb_epoch)
-
-    score = rm.evaluate(X_test, y_test, verbose=1)
+    #score = rm.evaluate(X_test, y_test, verbose=1)
     rm.save(model_name)
     
     if job_type == 'cloud':
@@ -128,6 +102,26 @@ def get_classes(data):
             classes.append(item[1].lower())
     classes = sorted(classes)
     return classes
+
+def separate_classes(data):
+    train, test = [], []
+    for item in data:
+        if item[0] == 'train':
+            train.append(item[2])
+        elif item[0] == 'test':
+            test.append(item[2])
+    return train, test
+
+def sequence_generator(set_file, set_list, classes, batch_size):
+    while True:
+        X, y = [], []
+        for _ in range(batch_size):
+            sample = random.choice(set_list)
+            vector = pd.read_hdf(set_file, sample)
+            X.append(vector.values)
+            y.append(get_class_one_hot(classes, sample.split('_')[1]))
+
+        yield np.array(X), np.array(y)
 
 def build_lstm(nb_classes, seq_length):
     model = Sequential()
@@ -167,7 +161,18 @@ def get_model_memory_usage(batch_size, model):
     return gbytes
 
 if __name__ == '__main__':
-    seq_length = 40
-    job_type = sys.argv[1]
-    print "Starting " + job_type + " job."
-    train(seq_length, job_type=job_type)
+    parser = argparse.ArgumentParser(
+            description='Run a training job for the lstm')
+    parser.add_argument('--job_type',
+            help='cloud or local job')
+    parser.add_argument('--job_dir',
+            help='local or cloud location to get resources and write outputs',
+            required=True)
+    args = parser.parse_args().__dict__
+
+    job_type = args.pop('job_type')
+    job_dir = args.pop('job_dir')
+
+    print "Starting " + job_type + " job. Directory is " + job_dir
+
+    train(40, job_dir=job_dir, job_type=job_type)
