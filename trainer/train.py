@@ -10,7 +10,6 @@ import csv
 import sys
 import argparse
 import random
-import os.path
 from tqdm import tqdm
 from tensorflow.python.lib.io import file_io
 from datetime import datetime
@@ -38,38 +37,50 @@ def train(seq_length, job_dir, job_type='local'):
         #csv_logger = CSVLogger('gs://lstm-training/logs/csv' + str(timestamp) + '.log')
         callbacks = [early_stopper, tb]
         df = file_io.FileIO(job_dir + '/data_file.csv', 'r')
-        training_set = file_io.FileIO(job_dir + '/training.hdf5', 'r')
-        testing_set = file_io.FileIO(job_dir + '/validation.hdf5', 'r')
     else:
-        checkpointer = ModelCheckpoint(filepath=job_dir + '/checkpoints/{epoch:03d}-{val_loss:.3f}.hdf5',
+        checkpointer = ModelCheckpoint(filepath=job_dir \
+                + '/checkpoints/{epoch:03d}-{val_loss:.3f}.hdf5',
                 verbose=1, save_best_only=True)
         tb = TensorBoard(log_dir=job_dir + '/logs/tb')
         csv_logger = CSVLogger(job_dir + '/logs/csv' + str(timestamp) + '.log')
         callbacks = [checkpointer, tb, early_stopper, csv_logger]
         df = open(job_dir + '/data_file.csv','r')
-        training_set = 'training.hdf5'
-        testing_set = 'validation.hdf5'
 
     data_info = list(csv.reader(df))
     classes = get_classes(data_info)
     training_list, testing_list = separate_classes(data_info)
     steps_per_epoch = (len(data_info) * 0.7) // batch_size
 
-    training_gen = sequence_generator(training_set, 
-            training_list, 
+    if job_type == 'cloud':
+        training_gen = sequence_generator_cl(training_list,
             classes,
-            batch_size)
-    validation_gen = sequence_generator(testing_set,
-            testing_list,
+            batch_size,
+            seq_length)
+        validation_gen = sequence_generator_cl(testing_list,
             classes,
-            batch_size)
+            batch_size,
+            seq_length)
+    elif job_type == 'local':
+        training_gen = sequence_generator_l(training_list,
+            classes,
+            batch_size,
+            job_dir,
+            seq_length)
+        validation_gen = sequence_generator_l(testing_list,
+            classes,
+            batch_size,
+            job_dir,
+            seq_length)
 
-    print str(len(classes)) + " classes, " + str(len(data_info)) + " vectors listed"
+
+    print str(len(classes)) + " classes, " + str(len(data_info)) \
+            + " vectors listed"
     print "Building lstm of seq_length " + str(seq_length)
 
-    rm = build_lstm(len(classes), seq_length)
+    rm = build_lstm(len(classes), int(seq_length))
 
-    print "Estimated model memory usage: " + str(get_model_memory_usage(batch_size, rm))
+    print "Estimated model memory usage: " \
+            + str(get_model_memory_usage(batch_size, rm))
     print "Starting fit_generator."
 
     hist = rm.fit_generator(
@@ -85,8 +96,8 @@ def train(seq_length, job_dir, job_type='local'):
     rm.save(model_name)
     
     if job_type == 'cloud':
-        with file_io.FileIO('model_name', mode='r') as in_f:
-            with file_io.FileIO('gs://sd-training/' + model_name, mode = 'w+') as out_f:
+        with file_io.FileIO(model_name, mode='r') as in_f:
+            with file_io.FileIO('gs://lstm-training/models/' + model_name, mode = 'w+') as out_f:
                 out_f.write(in_f.read())
 
 def get_class_one_hot(classes, class_str):
@@ -112,12 +123,27 @@ def separate_classes(data):
             test.append(item[2])
     return train, test
 
-def sequence_generator(set_file, set_list, classes, batch_size):
+def sequence_generator_cl(set_list, classes, batch_size, job_dir, seq_length):
     while True:
         X, y = [], []
         for _ in range(batch_size):
             sample = random.choice(set_list)
-            vector = pd.read_hdf(set_file, sample)
+            name = file_io.FileIO(job_dir + sample + '-' \
+                    + seq_length + '-features.txt', 'r')
+            vector = pd.read_csv(name, sep=" ", header=None)
+            X.append(vector.values)
+            y.append(get_class_one_hot(classes, sample.split('_')[1]))
+
+        yield np.array(X), np.array(y)
+
+def sequence_generator_l(set_list, classes, batch_size, job_dir, seq_length):
+    while True:
+        X, y = [], []
+        for _ in range(batch_size):
+            sample = random.choice(set_list)
+            name = job_dir + '/sequences/' + sample + '-' \
+                    + seq_length + '-features.txt'
+            vector = pd.read_csv(name, sep=" ", header=None)
             X.append(vector.values)
             y.append(get_class_one_hot(classes, sample.split('_')[1]))
 
@@ -168,11 +194,15 @@ if __name__ == '__main__':
     parser.add_argument('--job_dir',
             help='local or cloud location to get resources and write outputs',
             required=True)
+    parser.add_argument('--seq_length',
+            help='length of a sequence in frames',
+            required=True)
     args = parser.parse_args().__dict__
 
     job_type = args.pop('job_type')
     job_dir = args.pop('job_dir')
+    seq_length = args.pop('seq_length')
 
     print "Starting " + job_type + " job. Directory is " + job_dir
 
-    train(40, job_dir=job_dir, job_type=job_type)
+    train(seq_length, job_dir=job_dir, job_type=job_type)
