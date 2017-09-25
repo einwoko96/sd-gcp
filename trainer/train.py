@@ -10,6 +10,7 @@ import csv
 import sys
 import argparse
 import random
+import os
 from tqdm import tqdm
 from tensorflow.python.lib.io import file_io
 from datetime import datetime
@@ -35,15 +36,21 @@ def train(seq_length, job_dir, job_type='local', batch_size=32):
         tb = TensorBoard(log_dir=job_dir + '/logs/tb')
         #csv_logger = CSVLogger('gs://lstm-training/logs/csv' + str(timestamp) + '.log')
         callbacks = [early_stopper, tb]
-        df = file_io.FileIO(job_dir + '/data_file.csv', 'r')
+        df = file_io.FileIO(job_dir + '/data_file_' + seq_length + '.csv', 'r')
     else:
         checkpointer = ModelCheckpoint(filepath=job_dir \
+                + os.environ['JOB_NAME'] 
                 + '/checkpoints/{epoch:03d}-{val_loss:.3f}.hdf5',
-                verbose=1, save_best_only=True)
-        tb = TensorBoard(log_dir=job_dir + '/logs/tb')
-        csv_logger = CSVLogger(job_dir + '/logs/csv' + str(timestamp) + '.log')
+                verbose=1,
+                save_best_only=True)
+        tb = TensorBoard(log_dir=job_dir \
+                + os.environ['JOB_NAME'] \
+                + '/logs/tb')
+        csv_logger = CSVLogger(job_dir \
+                + os.environ['JOB_NAME'] \
+                + '/logs/csv' + str(timestamp) + '.log')
         callbacks = [checkpointer, tb, early_stopper, csv_logger]
-        df = open(job_dir + '/data_file.csv','r')
+        df = open(job_dir + '/data_file_' + seq_length + '.csv','r')
 
     data_info = list(csv.reader(df))
     classes = get_classes(data_info)
@@ -127,8 +134,10 @@ def sequence_generator_cl(set_list, classes, batch_size, job_dir, seq_length):
         X, y = [], []
         for _ in range(batch_size):
             sample = random.choice(set_list)
-            name = file_io.FileIO(job_dir + sample + '-' \
-                    + seq_length + '-features.txt', 'r')
+            name = file_io.FileIO(job_dir + '/sequences/' \
+                    + seq_length + '/' + sample + '-' \
+                    + seq_length + '-features.txt',
+                    'r')
             vector = pd.read_csv(name, sep=" ", header=None)
             X.append(vector.values)
             y.append(get_class_one_hot(classes, sample.split('_')[1]))

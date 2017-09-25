@@ -1,5 +1,7 @@
 #!/bin/bash
 
+export JOB_NAME="lstm_train_$(date +%Y%m%d_%H%M%S)"
+
 python trainer/train.py \
 	--job_type local \
 	--job_dir $(pwd) \
