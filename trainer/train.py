@@ -4,14 +4,12 @@ Train our RNN on bottlecap or prediction files generated from our CNN.
 import numpy as np
 import pandas as pd
 import tensorflow as tf
-import tables
 import time
 import csv
 import sys
 import argparse
 import random
 import os
-from tqdm import tqdm
 from tensorflow.python.lib.io import file_io
 from datetime import datetime
 from keras.layers import Dense, Flatten, Dropout
