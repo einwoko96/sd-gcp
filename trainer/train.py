@@ -20,11 +20,10 @@ from keras.optimizers import Adam
 from keras.callbacks import TensorBoard, ModelCheckpoint, EarlyStopping, CSVLogger
 from keras.utils import np_utils
 
-def train(seq_length, job_dir, job_type='local'):
+def train(seq_length, job_dir, job_type='local', batch_size=32):
 
     # Set variables
     nb_epoch = 1000
-    batch_size = 32
     timestamp = time.time()
     model_name = "trained-" + str(timestamp) + ".hdf5"
     early_stopper = EarlyStopping(patience=10)
@@ -97,7 +96,7 @@ def train(seq_length, job_dir, job_type='local'):
     
     if job_type == 'cloud':
         with file_io.FileIO(model_name, mode='r') as in_f:
-            with file_io.FileIO('gs://lstm-training/models/' + model_name, mode = 'w+') as out_f:
+            with file_io.FileIO(job_dir + '/models/' + model_name, mode = 'w+') as out_f:
                 out_f.write(in_f.read())
 
 def get_class_one_hot(classes, class_str):
@@ -197,12 +196,16 @@ if __name__ == '__main__':
     parser.add_argument('--seq_length',
             help='length of a sequence in frames',
             required=True)
+    parser.add_argument('--batch_size',
+            help='batch size per step',
+            required=True)
     args = parser.parse_args().__dict__
 
     job_type = args.pop('job_type')
     job_dir = args.pop('job_dir')
     seq_length = args.pop('seq_length')
+    batch_size = int(args.pop('batch_size'))
 
     print "Starting " + job_type + " job. Directory is " + job_dir
 
-    train(seq_length, job_dir=job_dir, job_type=job_type)
+    train(seq_length, job_dir=job_dir, job_type=job_type, batch_size=batch_size)

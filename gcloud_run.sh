@@ -14,4 +14,7 @@ gcloud ml-engine jobs submit training ${JOB_NAME} \
 	--region ${REGION} \
 	--config=trainer/cloudml-gpu.yaml \
 	-- \
-	cloud
+	--job_type cloud \
+	--job_dir "gs://lstm-training" \
+	--seq_length 40 \
+	--batch_size 32
