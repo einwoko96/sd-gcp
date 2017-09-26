@@ -4,6 +4,7 @@ Train our RNN on bottlecap or prediction files generated from our CNN.
 import numpy as np
 import pandas as pd
 import tensorflow as tf
+import cPickle as pickle
 import time
 import csv
 import sys
@@ -134,9 +135,10 @@ def sequence_generator_cl(set_list, classes, batch_size, job_dir, seq_length):
             sample = random.choice(set_list)
             name = file_io.FileIO(job_dir + '/sequences/' \
                     + seq_length + '/' + sample + '-' \
-                    + seq_length + '-features.txt',
+                    + seq_length + '-features.pkl',
                     'r')
-            vector = pd.read_csv(name, sep=" ", header=None)
+            unpickled = pd.read_pickle(name)
+            vector = pd.read_pickle(unpickled, sep=" ", header=None)
             X.append(vector.values)
             y.append(get_class_one_hot(classes, sample.split('_')[1]))
 
@@ -147,9 +149,11 @@ def sequence_generator_l(set_list, classes, batch_size, job_dir, seq_length):
         X, y = [], []
         for _ in range(batch_size):
             sample = random.choice(set_list)
-            name = job_dir + '/sequences/' + sample + '-' \
-                    + seq_length + '-features.txt'
-            vector = pd.read_csv(name, sep=" ", header=None)
+            name = job_dir + '/sequences/' + seq_length + '/' \
+                    + sample + '-' \
+                    + seq_length + '-features.pkl'
+            unpickled = pd.read_pickle(name)
+            vector = pd.read_csv(unpickled, sep=" ", header=None)
             X.append(vector.values)
             y.append(get_class_one_hot(classes, sample.split('_')[1]))
 
