@@ -7,6 +7,7 @@ import tensorflow as tf
 import cPickle as pickle
 import time, csv, sys, argparse, random, os, glob
 from tensorflow.python.lib.io import file_io
+from subprocess import call
 from keras.layers import Dense, Flatten, Dropout
 from keras.layers.recurrent import LSTM
 from keras.models import Sequential, load_model
@@ -16,8 +17,9 @@ from keras.callbacks import TensorBoard, ModelCheckpoint, EarlyStopping, CSVLogg
 from keras.utils import np_utils
 
 class CloudCheckpoint(keras.callbacks.Callback):
-    def __init__(self, checkpoint_path, output_path):
+    def __init__(self, checkpoint_path, output_path, log_path):
         self.checkpoint_path = checkpoint_path
+        self.log_path = log_path
         self.output_path = output_path
         self.saved = []
 
@@ -28,7 +30,21 @@ class CloudCheckpoint(keras.callbacks.Callback):
         for item in unsaved:
             with file_io.FileIO(os.path.join(self.checkpoint_path, item),
                     mode='r') as input_f:
-                with file_io.FileIO(os.path.join(self.output_path, item),
+                with file_io.FileIO(os.path.join(self.output_path,
+                    'checkpoints', item),
+                        mode='w+') as output_f:
+                    output_f.write(input_f.read())
+            self.saved.append(item)
+
+    def on_epoch_end(self, epoch, logs={}):
+        local = [a.split(self.log_path)[1].lstrip('/') for a in
+                glob.glob(os.path.join(self.log_path, '*.csv'))]
+        unsaved = [a for a in local if a not in self.saved]
+        for item in unsaved:
+            with file_io.FileIO(os.path.join(self.log_path, item),
+                    mode='r') as input_f:
+                with file_io.FileIO(os.path.join(self.output_path,
+                    'logs', item),
                         mode='w+') as output_f:
                     output_f.write(input_f.read())
             self.saved.append(item)
@@ -44,7 +60,10 @@ def train(seq_length, job_dir, job_type='local',
 
     # Open files from cloud or locally for data file and training set
     if job_type == 'cloud':
+        call(['gsutil', '-m', 'cp', '-r',
+            'gs://lstm-training/sequences/40', '/tmp'])
         checkpoint_path = os.path.join('/tmp', 'checkpoints')
+        log_path = os.path.join('/tmp', 'csv')
         try:
             os.mkdir(os.path.join(checkpoint_path))
         except OSError:
@@ -53,10 +72,11 @@ def train(seq_length, job_dir, job_type='local',
                 filepath=os.path.join(checkpoint_path,
                 '{epoch:03d}-{val_loss:.3f}.hdf5'),
                 verbose=1, save_best_only=True)
-        saver = CloudCheckpoint(checkpoint_path, output_path)
+        saver = CloudCheckpoint(checkpoint_path, output_path, log_path)
         tb = TensorBoard(log_dir=os.path.join(output_path, 'tb'))
-        #csv_logger = CSVLogger('/tmp/csv/' + str(timestamp) + '.log')
-        callbacks = [early_stopper, tb, checkpointer, saver]
+        csv_logger = CSVLogger(os.path.join('/tmp', 'csv',
+            str(timestamp) + '.log'))
+        callbacks = [early_stopper, tb, checkpointer, logger, saver]
         df = file_io.FileIO(os.path.join(job_dir,
             'data_file_' + seq_length + '.csv'), 'r')
     else:
@@ -124,7 +144,7 @@ def train(seq_length, job_dir, job_type='local',
     hist = rm.fit_generator(
             generator=training_gen,
             steps_per_epoch=steps_per_epoch,
-            epochs=3,
+            epochs=nb_epoch,
             verbose=1,
             callbacks=callbacks,
             validation_data=validation_gen,
@@ -132,12 +152,9 @@ def train(seq_length, job_dir, job_type='local',
 
     
     if job_type == 'cloud':
-        rm.save(os.path.join(output_path, model_name))
-        with file_io.FileIO(model_name, mode='r') as in_f:
-            with file_io.FileIO(
-                    os.path.join(output_path, model_name),
-                    mode = 'w+') as out_f:
-                out_f.write(in_f.read())
+        model_path = os.path.join('/tmp/', model_name)
+        rm.save(model_path)
+        call(['gsutil', 'cp', model_path, output_path])
     elif job_type == 'local':
         rm.save(os.path.join(job_dir_output, model_name))
 
@@ -169,11 +186,8 @@ def sequence_generator_cl(set_list, classes, batch_size, job_dir, seq_length):
         X, y = [], []
         for _ in range(batch_size):
             sample = random.choice(set_list)
-            name = file_io.FileIO(os.path.join(job_dir,
-                'sequences',
-                seq_length,
-                sample + '-' + seq_length + '-features.pkl'),
-                'r')
+            name = os.path.join('/tmp/40',
+                sample + '-' + seq_length + '-features.pkl')
             vector = pd.read_pickle(name, compression='gzip')
             X.append(vector.values)
             y.append(get_class_one_hot(classes, sample.split('_')[1]))
