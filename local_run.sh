@@ -6,4 +6,4 @@ python trainer/train.py \
 	--job_type local \
 	--job_dir $(pwd) \
 	--seq_length 40 \
-	--batch_size 32
+	--batch_size 32 \

@@ -15,7 +15,7 @@ gcloud ml-engine jobs submit training ${JOB_NAME} \
 	--config=trainer/cloudml-gpu.yaml \
 	-- \
 	--job_type cloud \
-	--job_dir ${BUCKET_NAME} \
+	--job_dir ${JOB_DIR} \
 	--output_path ${OUTPUT_PATH} \
 	--seq_length 40 \
 	--batch_size 32

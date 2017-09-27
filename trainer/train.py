@@ -22,7 +22,7 @@ class CloudCheckpoint(keras.callbacks.Callback):
         self.saved = []
 
     def on_epoch_begin(self, epoch, logs={}):
-        local = [a.split(self.checkpoint_path)[1] for a in
+        local = [a.split(self.checkpoint_path)[1].lstrip('/') for a in
                 glob.glob(os.path.join(self.checkpoint_path, '*.hdf5'))]
         unsaved = [a for a in local if a not in self.saved]
         for item in unsaved:
@@ -74,10 +74,7 @@ def train(seq_length, job_dir, job_type='local',
         csv_log_name = os.path.join(job_dir_output,
                 'csv', str(timestamp) + '.log')
         csv_logger = CSVLogger(csv_log_name)
-        chk = os.path.join(job_dir_output, 'checkpoints')
-        saver = CloudCheckpoint(os.path.join(job_dir_output, 'checkpoints'),
-                'gs://lstm-training/test')
-        callbacks = [checkpointer, tb, early_stopper, csv_logger, saver]
+        callbacks = [checkpointer, tb, early_stopper, csv_logger]
         df = open(os.path.join(job_dir,
             'data_file_' + seq_length + '.csv'),'r')
 
@@ -94,10 +91,12 @@ def train(seq_length, job_dir, job_type='local',
         training_gen = sequence_generator_cl(training_list,
             classes,
             batch_size,
+            job_dir,
             seq_length)
         validation_gen = sequence_generator_cl(testing_list,
             classes,
             batch_size,
+            job_dir,
             seq_length)
     elif job_type == 'local':
         training_gen = sequence_generator_l(training_list,
@@ -125,21 +124,22 @@ def train(seq_length, job_dir, job_type='local',
     hist = rm.fit_generator(
             generator=training_gen,
             steps_per_epoch=steps_per_epoch,
-            epochs=nb_epoch,
+            epochs=3,
             verbose=1,
             callbacks=callbacks,
             validation_data=validation_gen,
             validation_steps=10)
 
-    #score = rm.evaluate(X_test, y_test, verbose=1)
-    rm.save(model_name)
     
     if job_type == 'cloud':
+        rm.save(os.path.join(output_path, model_name))
         with file_io.FileIO(model_name, mode='r') as in_f:
             with file_io.FileIO(
                     os.path.join(output_path, model_name),
                     mode = 'w+') as out_f:
                 out_f.write(in_f.read())
+    elif job_type == 'local':
+        rm.save(os.path.join(job_dir_output, model_name))
 
 def get_class_one_hot(classes, class_str):
     label_encoded = classes.index(class_str.lower())
@@ -169,11 +169,12 @@ def sequence_generator_cl(set_list, classes, batch_size, job_dir, seq_length):
         X, y = [], []
         for _ in range(batch_size):
             sample = random.choice(set_list)
-            name = file_io.FileIO(job_dir + '/sequences/' \
-                    + seq_length + '/' + sample + '-' \
-                    + seq_length + '-features.pkl',
-                    'r')
-            vector = pd.read_pickle(name)
+            name = file_io.FileIO(os.path.join(job_dir,
+                'sequences',
+                seq_length,
+                sample + '-' + seq_length + '-features.pkl'),
+                'r')
+            vector = pd.read_pickle(name, compression='gzip')
             X.append(vector.values)
             y.append(get_class_one_hot(classes, sample.split('_')[1]))
 
@@ -247,7 +248,8 @@ if __name__ == '__main__':
     parser.add_argument('--output_path',
             default='',
             help='cloud output directory based on job name')
-    args = parser.parse_args().__dict__
+    args, unknown = parser.parse_known_args()
+    args = args.__dict__
 
     job_type = args.pop('job_type')
     job_dir = args.pop('job_dir')
