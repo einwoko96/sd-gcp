@@ -5,22 +5,36 @@ import numpy as np
 import pandas as pd
 import tensorflow as tf
 import cPickle as pickle
-import time
-import csv
-import sys
-import argparse
-import random
-import os
+import time, csv, sys, argparse, random, os, glob
 from tensorflow.python.lib.io import file_io
-from datetime import datetime
 from keras.layers import Dense, Flatten, Dropout
 from keras.layers.recurrent import LSTM
 from keras.models import Sequential, load_model
 from keras.optimizers import Adam
+import keras.callbacks
 from keras.callbacks import TensorBoard, ModelCheckpoint, EarlyStopping, CSVLogger
 from keras.utils import np_utils
 
-def train(seq_length, job_dir, job_type='local', batch_size=32):
+class CloudCheckpoint(keras.callbacks.Callback):
+    def __init__(self, checkpoint_path, output_path):
+        self.checkpoint_path = checkpoint_path
+        self.output_path = output_path
+        self.saved = []
+
+    def on_epoch_begin(self, epoch, logs={}):
+        local = [a.split(self.checkpoint_path)[1] for a in
+                glob.glob(os.path.join(self.checkpoint_path, '*.hdf5'))]
+        unsaved = [a for a in local if a not in self.saved]
+        for item in unsaved:
+            with file_io.FileIO(os.path.join(self.checkpoint_path, item),
+                    mode='r') as input_f:
+                with file_io.FileIO(os.path.join(self.output_path, item),
+                        mode='w+') as output_f:
+                    output_f.write(input_f.read())
+            self.saved.append(item)
+
+def train(seq_length, job_dir, job_type='local',
+        batch_size=32, output_path=''):
 
     # Set variables
     nb_epoch = 1000
@@ -30,31 +44,51 @@ def train(seq_length, job_dir, job_type='local', batch_size=32):
 
     # Open files from cloud or locally for data file and training set
     if job_type == 'cloud':
-        #checkpointer = ModelCheckpoint(filepath='gs://lstm-training/checkpoints/{epoch:03d}-{val_loss:.3f}.hdf5',
-        #        verbose=1, save_best_only=True)
-        tb = TensorBoard(log_dir=job_dir + '/logs/tb')
-        #csv_logger = CSVLogger('gs://lstm-training/logs/csv' + str(timestamp) + '.log')
-        callbacks = [early_stopper, tb]
-        df = file_io.FileIO(job_dir + '/data_file_' + seq_length + '.csv', 'r')
+        checkpoint_path = os.path.join('/tmp', 'checkpoints')
+        try:
+            os.mkdir(os.path.join(checkpoint_path))
+        except OSError:
+            pass
+        checkpointer = ModelCheckpoint(
+                filepath=os.path.join(checkpoint_path,
+                '{epoch:03d}-{val_loss:.3f}.hdf5'),
+                verbose=1, save_best_only=True)
+        saver = CloudCheckpoint(checkpoint_path, output_path)
+        tb = TensorBoard(log_dir=os.path.join(output_path, 'tb'))
+        #csv_logger = CSVLogger('/tmp/csv/' + str(timestamp) + '.log')
+        callbacks = [early_stopper, tb, checkpointer, saver]
+        df = file_io.FileIO(os.path.join(job_dir,
+            'data_file_' + seq_length + '.csv'), 'r')
     else:
-        checkpointer = ModelCheckpoint(filepath=job_dir \
-                + os.environ['JOB_NAME'] 
-                + '/checkpoints/{epoch:03d}-{val_loss:.3f}.hdf5',
+        job_dir_output  = os.path.join(job_dir, os.environ['JOB_NAME'])
+        os.mkdir(job_dir_output)
+        os.mkdir(os.path.join(job_dir_output, 'tb'))
+        os.mkdir(os.path.join(job_dir_output, 'csv'))
+        os.mkdir(os.path.join(job_dir_output, 'checkpoints'))
+        checkpointer = ModelCheckpoint(filepath=os.path.join(job_dir_output,
+                'checkpoints',
+                '{epoch:03d}-{val_loss:.3f}.hdf5'),
                 verbose=1,
                 save_best_only=True)
-        tb = TensorBoard(log_dir=job_dir \
-                + os.environ['JOB_NAME'] \
-                + '/logs/tb')
-        csv_logger = CSVLogger(job_dir \
-                + os.environ['JOB_NAME'] \
-                + '/logs/csv' + str(timestamp) + '.log')
-        callbacks = [checkpointer, tb, early_stopper, csv_logger]
-        df = open(job_dir + '/data_file_' + seq_length + '.csv','r')
+        tb = TensorBoard(log_dir=os.path.join(job_dir_output, 'tb'))
+        csv_log_name = os.path.join(job_dir_output,
+                'csv', str(timestamp) + '.log')
+        csv_logger = CSVLogger(csv_log_name)
+        chk = os.path.join(job_dir_output, 'checkpoints')
+        saver = CloudCheckpoint(os.path.join(job_dir_output, 'checkpoints'),
+                'gs://lstm-training/test')
+        callbacks = [checkpointer, tb, early_stopper, csv_logger, saver]
+        df = open(os.path.join(job_dir,
+            'data_file_' + seq_length + '.csv'),'r')
 
     data_info = list(csv.reader(df))
     classes = get_classes(data_info)
     training_list, testing_list = separate_classes(data_info)
     steps_per_epoch = (len(data_info) * 0.7) // batch_size
+
+    print "Dataset split:"
+    print str(len(training_list)) + " training"
+    print str(len(testing_list)) + " testing"
 
     if job_type == 'cloud':
         training_gen = sequence_generator_cl(training_list,
@@ -80,13 +114,13 @@ def train(seq_length, job_dir, job_type='local', batch_size=32):
 
     print str(len(classes)) + " classes, " + str(len(data_info)) \
             + " vectors listed"
-    print "Building lstm of seq_length " + str(seq_length)
+    print "Building lstm..."
 
     rm = build_lstm(len(classes), int(seq_length))
 
     print "Estimated model memory usage: " \
             + str(get_model_memory_usage(batch_size, rm))
-    print "Starting fit_generator."
+    print "Starting up fit_generator..."
 
     hist = rm.fit_generator(
             generator=training_gen,
@@ -102,7 +136,9 @@ def train(seq_length, job_dir, job_type='local', batch_size=32):
     
     if job_type == 'cloud':
         with file_io.FileIO(model_name, mode='r') as in_f:
-            with file_io.FileIO(job_dir + '/models/' + model_name, mode = 'w+') as out_f:
+            with file_io.FileIO(
+                    os.path.join(output_path, model_name),
+                    mode = 'w+') as out_f:
                 out_f.write(in_f.read())
 
 def get_class_one_hot(classes, class_str):
@@ -137,8 +173,7 @@ def sequence_generator_cl(set_list, classes, batch_size, job_dir, seq_length):
                     + seq_length + '/' + sample + '-' \
                     + seq_length + '-features.pkl',
                     'r')
-            unpickled = pd.read_pickle(name)
-            vector = pd.read_pickle(unpickled, sep=" ", header=None)
+            vector = pd.read_pickle(name)
             X.append(vector.values)
             y.append(get_class_one_hot(classes, sample.split('_')[1]))
 
@@ -152,8 +187,7 @@ def sequence_generator_l(set_list, classes, batch_size, job_dir, seq_length):
             name = job_dir + '/sequences/' + seq_length + '/' \
                     + sample + '-' \
                     + seq_length + '-features.pkl'
-            unpickled = pd.read_pickle(name)
-            vector = pd.read_csv(unpickled, sep=" ", header=None)
+            vector = pd.read_pickle(name, compression='gzip')
             X.append(vector.values)
             y.append(get_class_one_hot(classes, sample.split('_')[1]))
 
@@ -208,15 +242,25 @@ if __name__ == '__main__':
             help='length of a sequence in frames',
             required=True)
     parser.add_argument('--batch_size',
-            help='batch size per step',
-            required=True)
+            default=32,
+            help='batch size per step')
+    parser.add_argument('--output_path',
+            default='',
+            help='cloud output directory based on job name')
     args = parser.parse_args().__dict__
 
     job_type = args.pop('job_type')
     job_dir = args.pop('job_dir')
     seq_length = args.pop('seq_length')
     batch_size = int(args.pop('batch_size'))
+    output_path = args.pop('output_path')
 
-    print "Starting " + job_type + " job. Directory is " + job_dir
+    print "Starting with parameters:"
+    print "job_type: " + job_type
+    print "job_dir: " + job_dir
+    print "output_path: " + output_path
+    print "seq_length: " + seq_length
+    print "batch_size: " + str(batch_size)
 
-    train(seq_length, job_dir=job_dir, job_type=job_type, batch_size=batch_size)
+    train(seq_length, job_dir=job_dir, job_type=job_type, 
+            batch_size=batch_size, output_path=output_path)
