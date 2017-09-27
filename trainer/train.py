@@ -74,7 +74,7 @@ def train(seq_length, job_dir, job_type='local',
                 verbose=1, save_best_only=True)
         saver = CloudCheckpoint(checkpoint_path, output_path, log_path)
         tb = TensorBoard(log_dir=os.path.join(output_path, 'tb'))
-        csv_logger = CSVLogger(os.path.join('/tmp', 'csv',
+        logger = CSVLogger(os.path.join('/tmp', 'csv',
             str(timestamp) + '.log'))
         callbacks = [early_stopper, tb, checkpointer, logger, saver]
         df = file_io.FileIO(os.path.join(job_dir,
