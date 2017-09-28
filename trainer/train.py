@@ -7,7 +7,7 @@ import tensorflow as tf
 import cPickle as pickle
 import time, csv, sys, argparse, random, os, glob
 from tensorflow.python.lib.io import file_io
-from subprocess import call
+from subprocess import call, Popen
 from keras.layers import Dense, Flatten, Dropout
 from keras.layers.recurrent import LSTM
 from keras.models import Sequential, load_model
@@ -21,33 +21,18 @@ class CloudCheckpoint(keras.callbacks.Callback):
         self.checkpoint_path = checkpoint_path
         self.log_path = log_path
         self.output_path = output_path
-        self.saved = []
 
     def on_epoch_begin(self, epoch, logs={}):
-        local = [a.split(self.checkpoint_path)[1].lstrip('/') for a in
-                glob.glob(os.path.join(self.checkpoint_path, '*.hdf5'))]
-        unsaved = [a for a in local if a not in self.saved]
-        for item in unsaved:
-            with file_io.FileIO(os.path.join(self.checkpoint_path, item),
-                    mode='r') as input_f:
-                with file_io.FileIO(os.path.join(self.output_path,
-                    'checkpoints', item),
-                        mode='w+') as output_f:
-                    output_f.write(input_f.read())
-            self.saved.append(item)
+        Popen(['gsutil', '-m', 'mv', os.path.join(checkpoint_path, '*'),
+            os.path.join(output_path, 'checkpoints')],
+            stdin=None, stdout=None,
+            stderr=None, close_fds=True)
 
     def on_epoch_end(self, epoch, logs={}):
-        local = [a.split(self.log_path)[1].lstrip('/') for a in
-                glob.glob(os.path.join(self.log_path, '*.csv'))]
-        unsaved = [a for a in local if a not in self.saved]
-        for item in unsaved:
-            with file_io.FileIO(os.path.join(self.log_path, item),
-                    mode='r') as input_f:
-                with file_io.FileIO(os.path.join(self.output_path,
-                    'logs', item),
-                        mode='w+') as output_f:
-                    output_f.write(input_f.read())
-            self.saved.append(item)
+        Popen(['gsutil', '-m', 'mv', os.path.join(log_path, '*'),
+            os.path.join(output_path, 'logs')],
+            stdin=None, stdout=None,
+            stderr=None, close_fds=True)
 
 def train(seq_length, job_dir, job_type='local',
         batch_size=32, output_path=''):
@@ -63,9 +48,10 @@ def train(seq_length, job_dir, job_type='local',
         call(['gsutil', '-m', 'cp', '-r',
             'gs://lstm-training/sequences/40', '/tmp'])
         checkpoint_path = os.path.join('/tmp', 'checkpoints')
-        log_path = os.path.join('/tmp', 'csv')
+        log_path = os.path.join('/tmp', 'logs')
         try:
-            os.mkdir(os.path.join(checkpoint_path))
+            os.mkdir(checkpoint_path)
+            os.mkdir(log_path)
         except OSError:
             pass
         checkpointer = ModelCheckpoint(
@@ -74,7 +60,7 @@ def train(seq_length, job_dir, job_type='local',
                 verbose=1, save_best_only=True)
         saver = CloudCheckpoint(checkpoint_path, output_path, log_path)
         tb = TensorBoard(log_dir=os.path.join(output_path, 'tb'))
-        logger = CSVLogger(os.path.join('/tmp', 'csv',
+        logger = CSVLogger(os.path.join(log_path,
             str(timestamp) + '.log'))
         callbacks = [early_stopper, tb, checkpointer, logger, saver]
         df = file_io.FileIO(os.path.join(job_dir,
