@@ -23,13 +23,14 @@ class CloudCheckpoint(keras.callbacks.Callback):
         self.output_path = output_path
 
     def on_epoch_begin(self, epoch, logs={}):
-        Popen(['gsutil', '-m', 'mv', os.path.join(checkpoint_path, '*'),
+        Popen(['gsutil', '-m', 'mv',
+            os.path.join(checkpoint_path, epoch + '*.hdf5'),
             os.path.join(output_path, 'checkpoints')],
             stdin=None, stdout=None,
             stderr=None, close_fds=True)
 
     def on_epoch_end(self, epoch, logs={}):
-        Popen(['gsutil', '-m', 'mv', os.path.join(log_path, '*'),
+        Popen(['gsutil', 'cp', os.path.join(log_path, '*.log'),
             os.path.join(output_path, 'logs')],
             stdin=None, stdout=None,
             stderr=None, close_fds=True)
@@ -45,6 +46,7 @@ def train(seq_length, job_dir, job_type='local',
 
     # Open files from cloud or locally for data file and training set
     if job_type == 'cloud':
+        # copies the whole dataset to /tmp
         call(['gsutil', '-m', 'cp', '-r',
             'gs://lstm-training/sequences/40', '/tmp'])
         checkpoint_path = os.path.join('/tmp', 'checkpoints')
@@ -61,7 +63,7 @@ def train(seq_length, job_dir, job_type='local',
         saver = CloudCheckpoint(checkpoint_path, output_path, log_path)
         tb = TensorBoard(log_dir=os.path.join(output_path, 'tb'))
         logger = CSVLogger(os.path.join(log_path,
-            str(timestamp) + '.log'))
+            'lstm_train_' str(timestamp) + '.log'))
         callbacks = [early_stopper, tb, checkpointer, logger, saver]
         df = file_io.FileIO(os.path.join(job_dir,
             'data_file_' + seq_length + '.csv'), 'r')
