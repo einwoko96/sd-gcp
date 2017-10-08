@@ -36,17 +36,18 @@ class CloudCheckpoint(keras.callbacks.Callback):
             stderr=None, close_fds=True)
 
 class Trainer():
-    def __init__(self):
+    def __init__(self, **kwargs):
         self.seq_length = seq_length
         self.batch_size = batch_size
         self.job_type = job_type
         self.job_dir = job_dir
         self.output_path = output_path
+        self.local_data_loc = ''
+        self.classes = []
         self.train_set = []
         self.test_set = []
 
-def train(seq_length, job_dir, job_type='local',
-        batch_size=32, output_path=''):
+def train(self):
 
     # Set variables
     nb_epoch = 1000
@@ -55,7 +56,7 @@ def train(seq_length, job_dir, job_type='local',
     early_stopper = EarlyStopping(patience=10)
 
     # Open files from cloud or locally for data file and training set
-    if job_type == 'cloud':
+    if self.job_type == 'cloud':
         # copies the whole dataset to /tmp
         call(['gsutil', '-m', 'cp', '-r',
             os.path.join('gs://lstm-training/sequences', data_dir), '/tmp'])
@@ -76,9 +77,9 @@ def train(seq_length, job_dir, job_type='local',
             'lstm_train_' str(timestamp) + '.log'))
         callbacks = [early_stopper, tb, checkpointer, logger, saver]
         df = file_io.FileIO(os.path.join(job_dir,
-            'data_file_' + seq_length + '.csv'), 'r')
+            'class_list_' + self.data_dir + '.csv'), 'r')
     else:
-        job_dir_output  = os.path.join(job_dir, os.environ['JOB_NAME'])
+        job_dir_output  = os.path.join(self.job_dir, os.environ['JOB_NAME'])
         os.mkdir(job_dir_output)
         os.mkdir(os.path.join(job_dir_output, 'tb'))
         os.mkdir(os.path.join(job_dir_output, 'csv'))
@@ -94,23 +95,18 @@ def train(seq_length, job_dir, job_type='local',
         csv_logger = CSVLogger(csv_log_name)
         callbacks = [checkpointer, tb, early_stopper, csv_logger]
         df = open(os.path.join(job_dir,
-            'data_file_' + seq_length + '.csv'),'r')
+            'class_list_' + self.data_dir + '.csv'),'r')
 
-    data_info = list(csv.reader(df))
-    classes = get_classes(data_info)
-    training_list, testing_list = separate_classes(data_info)
-    steps_per_epoch = (len(data_info) * 0.7) // self.batch_size
+    self.classes = list(csv.reader(df))
+    training_list, testing_list = self.separate_classes()
+    steps_per_epoch = (len(self.classes) * 0.7) // self.batch_size
 
     print "Dataset split:"
     print str(len(self.train_list)) + " training"
     print str(len(self.test_list)) + " testing"
 
-    if job_type == 'cloud':
-        training_gen = sequence_generator(self.train_list)
-        validation_gen = sequence_generator(self.test_list)
-    elif job_type == 'local':
-        training_gen = sequence_generator(self.train_set)
-        validation_gen = sequence_generator(self.test_set)
+    training_gen = sequence_generator(self.train_list)
+    validation_gen = sequence_generator(self.test_list)
 
     print str(len(self.classes)) + " classes, " + str(len(data_info)) \
             + " vectors listed"
@@ -139,9 +135,9 @@ def train(seq_length, job_dir, job_type='local',
     elif self.job_type == 'local':
         rm.save(os.path.join(job_dir_output, model_name))
 
-def get_class_one_hot(classes, class_str):
-    label_encoded = classes.index(class_str.lower())
-    label_hot = np_utils.to_categorical(label_encoded, len(classes))
+def get_class_one_hot(self, class_str):
+    label_encoded = self.classes.index(class_str.lower())
+    label_hot = np_utils.to_categorical(label_encoded, len(self.classes))
     label_hot = label_hot[0]
     return label_hot
 
@@ -152,20 +148,18 @@ def get_classes(self):
     self.classes = sorted(self.classes)
 
 def separate_classes(self):
-    for item in self.data:
-        if item[0] == 'train':
-            self.train.append(item[2])
-        elif item[0] == 'test':
-            self.test.append(item[2])
-    return train, test
+    for item in glob.glob(os.path.join(self.local_data_loc, '*.pkl')):
+        if 'train' in item:
+            self.train.append(item)
+        elif 'test' in item:
+            self.test.append(item)
 
-def sequence_generator(self, set_list):
+def sequence_generator(self, set_list, data_type):
     while True:
         X, y = [], []
         for _ in range(self.batch_size):
             sample = random.choice(set_list)
-            name = os.path.join(self.local_data, self.data_dir, 
-                sample + '-' + self.seq_length + '-features.pkl')
+            name = os.path.join(self.local_data_loc, self.data_dir, sample)
             vector = pd.read_pickle(name, compression='gzip')
             X.append(vector.values)
             y.append(get_class_one_hot(classes, sample.split('_')[1]))
