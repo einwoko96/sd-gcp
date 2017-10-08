@@ -35,6 +35,16 @@ class CloudCheckpoint(keras.callbacks.Callback):
             stdin=None, stdout=None,
             stderr=None, close_fds=True)
 
+class Trainer():
+    def __init__(self):
+        self.seq_length = seq_length
+        self.batch_size = batch_size
+        self.job_type = job_type
+        self.job_dir = job_dir
+        self.output_path = output_path
+        self.train_set = []
+        self.test_set = []
+
 def train(seq_length, job_dir, job_type='local',
         batch_size=32, output_path=''):
 
@@ -48,7 +58,7 @@ def train(seq_length, job_dir, job_type='local',
     if job_type == 'cloud':
         # copies the whole dataset to /tmp
         call(['gsutil', '-m', 'cp', '-r',
-            'gs://lstm-training/sequences/40', '/tmp'])
+            os.path.join('gs://lstm-training/sequences', data_dir), '/tmp'])
         checkpoint_path = os.path.join('/tmp', 'checkpoints')
         log_path = os.path.join('/tmp', 'logs')
         try:
@@ -89,44 +99,27 @@ def train(seq_length, job_dir, job_type='local',
     data_info = list(csv.reader(df))
     classes = get_classes(data_info)
     training_list, testing_list = separate_classes(data_info)
-    steps_per_epoch = (len(data_info) * 0.7) // batch_size
+    steps_per_epoch = (len(data_info) * 0.7) // self.batch_size
 
     print "Dataset split:"
-    print str(len(training_list)) + " training"
-    print str(len(testing_list)) + " testing"
+    print str(len(self.train_list)) + " training"
+    print str(len(self.test_list)) + " testing"
 
     if job_type == 'cloud':
-        training_gen = sequence_generator_cl(training_list,
-            classes,
-            batch_size,
-            job_dir,
-            seq_length)
-        validation_gen = sequence_generator_cl(testing_list,
-            classes,
-            batch_size,
-            job_dir,
-            seq_length)
+        training_gen = sequence_generator(self.train_list)
+        validation_gen = sequence_generator(self.test_list)
     elif job_type == 'local':
-        training_gen = sequence_generator_l(training_list,
-            classes,
-            batch_size,
-            job_dir,
-            seq_length)
-        validation_gen = sequence_generator_l(testing_list,
-            classes,
-            batch_size,
-            job_dir,
-            seq_length)
+        training_gen = sequence_generator(self.train_set)
+        validation_gen = sequence_generator(self.test_set)
 
-
-    print str(len(classes)) + " classes, " + str(len(data_info)) \
+    print str(len(self.classes)) + " classes, " + str(len(data_info)) \
             + " vectors listed"
     print "Building lstm..."
 
-    rm = build_lstm(len(classes), int(seq_length))
+    rm = build_lstm(len(self.classes), int(self.seq_length))
 
     print "Estimated model memory usage: " \
-            + str(get_model_memory_usage(batch_size, rm))
+            + str(get_model_memory_usage(self.batch_size, rm))
     print "Starting up fit_generator..."
 
     hist = rm.fit_generator(
@@ -139,11 +132,11 @@ def train(seq_length, job_dir, job_type='local',
             validation_steps=10)
 
     
-    if job_type == 'cloud':
+    if self.job_type == 'cloud':
         model_path = os.path.join('/tmp/', model_name)
         rm.save(model_path)
-        call(['gsutil', 'cp', model_path, output_path])
-    elif job_type == 'local':
+        call(['gsutil', 'cp', model_path, self.output_path])
+    elif self.job_type == 'local':
         rm.save(os.path.join(job_dir_output, model_name))
 
 def get_class_one_hot(classes, class_str):
@@ -152,60 +145,43 @@ def get_class_one_hot(classes, class_str):
     label_hot = label_hot[0]
     return label_hot
 
-def get_classes(data):
-    classes = []
-    for item in data:
-        if item[1].lower() not in classes:
-            classes.append(item[1].lower())
-    classes = sorted(classes)
-    return classes
+def get_classes(self):
+    for item in self.data:
+        if item[1].lower() not in self.classes:
+            self.classes.append(item[1].lower())
+    self.classes = sorted(self.classes)
 
-def separate_classes(data):
-    train, test = [], []
-    for item in data:
+def separate_classes(self):
+    for item in self.data:
         if item[0] == 'train':
-            train.append(item[2])
+            self.train.append(item[2])
         elif item[0] == 'test':
-            test.append(item[2])
+            self.test.append(item[2])
     return train, test
 
-def sequence_generator_cl(set_list, classes, batch_size, job_dir, seq_length):
+def sequence_generator(self, set_list):
     while True:
         X, y = [], []
-        for _ in range(batch_size):
+        for _ in range(self.batch_size):
             sample = random.choice(set_list)
-            name = os.path.join('/tmp/40',
-                sample + '-' + seq_length + '-features.pkl')
+            name = os.path.join(self.local_data, self.data_dir, 
+                sample + '-' + self.seq_length + '-features.pkl')
             vector = pd.read_pickle(name, compression='gzip')
             X.append(vector.values)
             y.append(get_class_one_hot(classes, sample.split('_')[1]))
 
         yield np.array(X), np.array(y)
 
-def sequence_generator_l(set_list, classes, batch_size, job_dir, seq_length):
-    while True:
-        X, y = [], []
-        for _ in range(batch_size):
-            sample = random.choice(set_list)
-            name = job_dir + '/sequences/' + seq_length + '/' \
-                    + sample + '-' \
-                    + seq_length + '-features.pkl'
-            vector = pd.read_pickle(name, compression='gzip')
-            X.append(vector.values)
-            y.append(get_class_one_hot(classes, sample.split('_')[1]))
-
-        yield np.array(X), np.array(y)
-
-def build_lstm(nb_classes, seq_length):
+def build_lstm(self):
     model = Sequential()
     model.add(LSTM(2048,
         return_sequences=True,
-        input_shape=(seq_length, 2048),
+        input_shape=(self.seq_length, 2048),
         dropout=0.5))
     model.add(Flatten())
     model.add(Dense(512, activation='relu'))
     model.add(Dropout(0.5))
-    model.add(Dense(nb_classes, activation='softmax'))
+    model.add(Dense(self.nb_classes, activation='softmax'))
     model.summary()
     optimizer = Adam(lr=1e-6)
     model.compile(loss='categorical_crossentropy',
@@ -250,6 +226,8 @@ if __name__ == '__main__':
     parser.add_argument('--output_path',
             default='',
             help='cloud output directory based on job name')
+    parser.add_argument('--data_dir',
+            help='dataset location in directory in `job_dir`/sequences')
     args, unknown = parser.parse_known_args()
     args = args.__dict__
 
