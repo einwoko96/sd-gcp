@@ -141,7 +141,8 @@ class Trainer():
         return label_hot
 
     def separate_classes(self):
-        for item in glob.glob(os.path.join(self.data_dir, '*.pkl')):
+#        for item in glob.glob(os.path.join(self.data_dir, '*.pkl')):
+        for item in glob.glob(os.path.join(self.data_dir, '*.npy')):
             if 'train' in item:
                 self.train_set.append(os.path.basename(item))
             elif 'test' in item:
@@ -153,8 +154,10 @@ class Trainer():
             for _ in range(self.batch_size):
                 sample = random.choice(set_list)
                 name = os.path.join(self.data_dir, sample)
-                vector = pd.read_pickle(name, compression='gzip')
-                X.append(vector.values)
+#                vector = pd.read_pickle(name, compression='gzip')
+                vector = np.load(name)
+#                X.append(vector.values)
+                X.append(vector)
                 y.append(self.get_class_one_hot(sample.split('_')[1]))
 
             yield np.array(X), np.array(y)
