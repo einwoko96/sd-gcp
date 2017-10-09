@@ -17,23 +17,23 @@ from keras.callbacks import TensorBoard, ModelCheckpoint, EarlyStopping, CSVLogg
 from keras.utils import np_utils
 
 class CloudCheckpoint(keras.callbacks.Callback):
-    def __init__(self, checkpoint_path, output_path, log_path):
+    def __init__(self, checkpoint_path, output_path, log_name):
         self.checkpoint_path = checkpoint_path
-        self.log_path = log_path
+        self.log_name = log_name
         self.output_path = output_path
 
-    def on_epoch_begin(self, epoch, logs={}):
-        Popen(['gsutil', '-m', 'mv',
-            os.path.join(checkpoint_path, epoch + '*.hdf5'),
-            os.path.join(output_path, 'checkpoints')],
-            stdin=None, stdout=None,
-            stderr=None, close_fds=True)
-
     def on_epoch_end(self, epoch, logs={}):
-        Popen(['gsutil', 'cp', os.path.join(log_path, '*.log'),
-            os.path.join(output_path, 'logs')],
+        print self.output_path
+        print self.log_name
+        Popen(['gsutil', 'cp', self.log_name,
+            os.path.join(self.output_path, os.path.basename(self.log_name))],
             stdin=None, stdout=None,
             stderr=None, close_fds=True)
+        #Popen(['gsutil', 'mv',
+        #    os.path.join(self.checkpoint_path, str(epoch) + '.hdf5'),
+        #    os.path.join(self.output_path, 'checkpoint.hdf5')],
+        #    stdin=None, stdout=None,
+        #    stderr=None, close_fds=True)
 
 class Trainer():
     def __init__(self, **kwargs):
@@ -41,9 +41,10 @@ class Trainer():
         self.seq_length = kwargs['seq_length']
         self.batch_size = kwargs['batch_size']
         self.job_dir = kwargs['job_dir']
+        self.checkpoint_path = os.path.join('/tmp', 'checkpoints')
+        self.log_path = os.path.join('/tmp', 'logs')
         if kwargs['job_type'] == 'cloud':
-            self.data_dir = os.path.join('/tmp/', 'sequences',
-                    kwargs['data_dir'])
+            self.data_dir = os.path.join('/tmp/', kwargs['data_dir'])
             self.output_path = kwargs['output_path']
         else:
             self.data_dir = os.path.join(kwargs['job_dir'],
@@ -63,42 +64,37 @@ class Trainer():
 
         # Open files from cloud or locally for data file and training set
         if self.job_type == 'cloud':
-            # copies the whole dataset to /tmp
             call(['gsutil', '-m', 'cp', '-r',
-                os.path.join(self.job_dir, 'sequences', self.data_dir),
-                '/tmp'])
-            checkpoint_path = os.path.join('/tmp', 'checkpoints')
-            log_path = os.path.join('/tmp', 'logs')
+                os.path.join(self.job_dir, 'sequences',
+                    os.path.basename(self.data_dir)), '/tmp'])
             try:
-                os.mkdir(checkpoint_path)
-                os.mkdir(log_path)
+                os.mkdir(self.checkpoint_path)
+                os.mkdir(self.log_path)
             except OSError:
                 pass
+            log_name = os.path.join(self.log_path,
+                    'lstm_train_' + str(timestamp) + '.log')
             checkpointer = ModelCheckpoint(
-                    filepath=os.path.join(checkpoint_path,
-                    '{epoch:03d}-{val_loss:.3f}.hdf5'),
+                    filepath=os.path.join(self.checkpoint_path,
+                    '{epoch}.hdf5'),
                     verbose=1, save_best_only=True)
-            saver = CloudCheckpoint(checkpoint_path, self.output_path, log_path)
-            tb = TensorBoard(log_dir=os.path.join(output_path, 'tb'))
-            logger = CSVLogger(os.path.join(log_path,
-                'lstm_train_' + str(timestamp) + '.log'))
+            saver = CloudCheckpoint(self.checkpoint_path,
+                    self.output_path, log_name)
+            tb = TensorBoard(log_dir=os.path.join(self.output_path, 'tb'))
+            logger = CSVLogger(log_name)
             callbacks = [early_stopper, tb, checkpointer, logger, saver]
-            df = file_io.FileIO(os.path.join(job_dir,
-                'class_list_' + self.data_dir + '.csv'), 'r')
+            df = file_io.FileIO(os.path.join(self.job_dir,
+                'class_list_' + os.path.basename(self.data_dir) + '.csv'), 'r')
         else:
             os.mkdir(self.output_path)
-            os.mkdir(os.path.join(self.output_path, 'tb'))
-            os.mkdir(os.path.join(self.output_path, 'csv'))
-            os.mkdir(os.path.join(self.output_path, 'checkpoints'))
             checkpointer = ModelCheckpoint(
                     filepath=os.path.join(self.output_path,
-                    'checkpoints',
-                    '{epoch:03d}-{val_loss:.3f}.hdf5'),
+                    'checkpoint.hdf5'),
                     verbose=1,
                     save_best_only=True)
-            tb = TensorBoard(log_dir=os.path.join(self.output_path, 'tb'))
+            tb = TensorBoard(log_dir=self.output_path)
             csv_log_name = os.path.join(self.output_path,
-                    'csv', str(timestamp) + '.log')
+                    str(timestamp) + '.log')
             csv_logger = CSVLogger(csv_log_name)
             callbacks = [checkpointer, tb, early_stopper, csv_logger]
             df = open(os.path.join(self.job_dir,
@@ -106,7 +102,7 @@ class Trainer():
 
         self.classes = df.read().strip('\r\n').lower().split(',')
         self.separate_classes()
-        steps_per_epoch = (len(self.classes) * 0.7) // self.batch_size
+        steps_per_epoch = ((len(self.train_set) + len(self.test_set)) * 0.7) // self.batch_size
 
         print str(len(self.classes)) + " classes listed."
         print str(len(self.train_set)) + " marked as training."
