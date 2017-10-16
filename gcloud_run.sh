@@ -17,5 +17,6 @@ gcloud ml-engine jobs submit training ${JOB_NAME} \
 	--job_type cloud \
 	--job_dir ${JOB_DIR} \
 	--output_path ${OUTPUT_PATH} \
+	--data_dir 40 \
 	--seq_length 40 \
 	--batch_size 32
