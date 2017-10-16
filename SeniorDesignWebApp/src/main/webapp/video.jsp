@@ -43,6 +43,20 @@
       </div>
     </nav>
 
+	<div id="container">
+	    <form id="form" method="post" action="/infer" enctype="multipart/form-data">
+	        <input type="file" name="pic" id="pic" accept="image/jpeg" />
+	        <input type="submit" value="Submit" />
+	    </form>
+	</div>
+    <div class="carousel-caption">
+      <p><a class="btn btn-lg btn-primary" href="https://www.sanders.senate.gov/" role="button">Bernie would've won.</a></p>
+      <br></br>
+    </div>
+	
+    <div><input class="btn btn-info btn-space" type="submit" value="Submit" />
+    <a href="/ofywebblog.jsp" class="btn btn-info btn-space" type="submit">Cancel</a></div>
+
     <div class="container-fluid">
       <div class="row">
         <div class="col-sm-3 col-md-2 sidebar">
@@ -69,7 +83,7 @@
 					  <h2>16:9 Responsive Aspect Ratio</h2>
 					  <div class="embed-responsive embed-responsive-16by9">
 						  <iframe class="embed-responsive-item"
-						    src="https://d2v9y0dukr6mq2.cloudfront.net/video/preview/terrain_w1anmt8er__PM.mp4"></iframe>
+						    src="terrain_w1anmt8er__PM.mp4"></iframe>
 					  </div>
 				  </div>
 			  </div>
