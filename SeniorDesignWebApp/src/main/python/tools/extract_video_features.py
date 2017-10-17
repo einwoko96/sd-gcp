@@ -16,7 +16,7 @@ from extractor import Extractor
 
 SEQ_LENGTH = 40
 # VIDEO_PATH = "/home/jovita/SeniorDesign2017/tools/train/Archery/archery-lPLLbPsMDU.avi"
-VIDEO_PATH = "https://d2v9y0dukr6mq2.cloudfront.net/video/preview/terrain_w1anmt8er__PM.mp4"
+VIDEO_PATH = "terrain_w1anmt8er__PM.mp4"
 # VIDEO_PATH_SAMPLE = "https://fpdl.vimeocdn.com/vimeo-prod-skyfire-std-us/01/792/3/78961286/203684545.mp4?token=1505994750-0x2b1d99a82b3fd9415f0e0e578d37cecfd8d5a5dd&download=1&filename=Sample+Videos+%2852%29+-+Copy.mp4.mp4"
 FRAMES_PER_VIDEO = "40"
 FRAME_RATE = "fps=1/1"          # frames per second(s)

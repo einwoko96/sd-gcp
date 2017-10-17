@@ -33,7 +33,7 @@
         <div id="navbar" class="navbar-collapse collapse">
           <ul class="nav navbar-nav navbar-right">
             <li><a href="/index.jsp">Dashboard</a></li>
-            <li><a href="/video.jsp">Video</a></li>
+            <li><a href="/video.jsp">Upload Video</a></li>
             <li><a href="#">Help</a></li>
           </ul>
           <form class="navbar-form navbar-right">
@@ -42,20 +42,6 @@
         </div>
       </div>
     </nav>
-
-	<div id="container">
-	    <form id="form" method="post" action="/infer" enctype="multipart/form-data">
-	        <input type="file" name="pic" id="pic" accept="image/jpeg" />
-	        <input type="submit" value="Submit" />
-	    </form>
-	</div>
-    <div class="carousel-caption">
-      <p><a class="btn btn-lg btn-primary" href="https://www.sanders.senate.gov/" role="button">Bernie would've won.</a></p>
-      <br></br>
-    </div>
-	
-    <div><input class="btn btn-info btn-space" type="submit" value="Submit" />
-    <a href="/ofywebblog.jsp" class="btn btn-info btn-space" type="submit">Cancel</a></div>
 
     <div class="container-fluid">
       <div class="row">
@@ -78,15 +64,23 @@
           <h1 class="page-header">Display</h1>
           
 	      <div class="container">
+	      <% if (request.getParameter("file") != null) { %>
 			  <div class="row">
 				  <div class="col-sm-7 col-sm-offset-1">
 					  <h2>16:9 Responsive Aspect Ratio</h2>
 					  <div class="embed-responsive embed-responsive-16by9">
 						  <iframe class="embed-responsive-item"
-						    src="terrain_w1anmt8er__PM.mp4"></iframe>
+						    src="<%= request.getParameter("file") %>"></iframe>
 					  </div>
 				  </div>
 			  </div>
+	      <%} else {%> 
+			<h2>Please upload a video in the mp4 or avi format.</h2>
+		    <form id="form" method="post" action="/video" enctype="multipart/form-data" class="btn btn-lg btn-primary">
+		        <input type="file" name="vid" id="vid" accept="video/*" />
+		        <input type="submit" value="Submit" />
+		    </form>
+	      <%}%> 
 		  </div>
 
           <h2 class="sub-header">Video Information</h2>

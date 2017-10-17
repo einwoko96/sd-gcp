@@ -33,7 +33,7 @@
         <div id="navbar" class="navbar-collapse collapse">
           <ul class="nav navbar-nav navbar-right">
             <li><a href="/index.jsp">Dashboard</a></li>
-            <li><a href="/video.jsp">Video</a></li>
+            <li><a href="/video.jsp">Upload Video</a></li>
             <li><a href="#">Help</a></li>
           </ul>
           <form class="navbar-form navbar-right">
