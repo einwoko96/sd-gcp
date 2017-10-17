@@ -9,7 +9,7 @@ import time, csv, sys, argparse, random, os, glob
 from tensorflow.python.lib.io import file_io
 from subprocess import call, Popen
 from keras.layers import Dense, Flatten, Dropout
-from keras.layers.recurrent import LSTM
+from keras.layers.recurrent import LSTM, GRU
 from keras.models import Sequential, load_model
 from keras.optimizers import Adam
 import keras.callbacks
@@ -41,6 +41,9 @@ class Trainer():
         self.seq_length = kwargs['seq_length']
         self.batch_size = kwargs['batch_size']
         self.job_dir = kwargs['job_dir']
+        self.unit_forget_bias = kwargs['unit_forget_bias']
+        self.dropout = kwargs['dropout']
+        self.recurrent_dropout = kwargs['recurrent_dropout']
         self.checkpoint_path = os.path.join('/tmp', 'checkpoints')
         self.log_path = os.path.join('/tmp', 'logs')
         if kwargs['job_type'] == 'cloud':
@@ -51,6 +54,7 @@ class Trainer():
                     'sequences', kwargs['data_dir'])
             self.output_path = os.path.join(self.job_dir,
                 os.environ['JOB_NAME'])
+        self.model_structure = kwargs['model_structure']
         self.classes = []
         self.train_set = []
         self.test_set = []
@@ -111,9 +115,12 @@ class Trainer():
         training_gen = self.sequence_generator(self.train_set)
         validation_gen = self.sequence_generator(self.test_set)
 
-        print "Building lstm..."
+        print "Building model..."
 
-        rm = self.build_lstm()
+        if self.model_structure == 'lstm':
+            rm = self.build_lstm()
+        elif self.model_structure == 'gru':
+            rm = self.build_gru()
 
         print "Starting up fit_generator..."
 
@@ -141,7 +148,6 @@ class Trainer():
         return label_hot
 
     def separate_classes(self):
-#        for item in glob.glob(os.path.join(self.data_dir, '*.pkl')):
         for item in glob.glob(os.path.join(self.data_dir, '*.npy')):
             if 'train' in item:
                 self.train_set.append(os.path.basename(item))
@@ -154,9 +160,7 @@ class Trainer():
             for _ in range(self.batch_size):
                 sample = random.choice(set_list)
                 name = os.path.join(self.data_dir, sample)
-#                vector = pd.read_pickle(name, compression='gzip')
                 vector = np.load(name)
-#                X.append(vector.values)
                 X.append(vector)
                 y.append(self.get_class_one_hot(sample.split('_')[1]))
 
@@ -167,7 +171,27 @@ class Trainer():
         model.add(LSTM(2048,
             return_sequences=True,
             input_shape=(self.seq_length, 2048),
-            dropout=0.5))
+            dropout=self.dropout,
+            recurrent_dropout=self.recurrent_dropout,
+            unit_forget_bias=self.unit_forget_bias))
+        model.add(Flatten())
+        model.add(Dense(512, activation='relu'))
+        model.add(Dropout(0.5))
+        model.add(Dense(len(self.classes), activation='softmax'))
+        model.summary()
+        optimizer = Adam(lr=1e-6)
+        model.compile(loss='categorical_crossentropy',
+                optimizer=optimizer,
+                metrics=['accuracy','top_k_categorical_accuracy'])
+        return model
+
+    def build_gru(self):
+        model = Sequential()
+        model.add(GRU(2048,
+            return_sequences=True,
+            input_shape=(self.seq_length, 2048),
+            dropout=self.dropout,
+            recurrent_dropout=self.recurrent_dropout))
         model.add(Flatten())
         model.add(Dense(512, activation='relu'))
         model.add(Dropout(0.5))
@@ -198,8 +222,23 @@ if __name__ == '__main__':
     parser.add_argument('--output_path',
             default='',
             help='cloud output directory based on job name')
+    parser.add_argument('--dropout',
+            type=float,
+            default=0.5,
+            help='fraction of units to drop in linear state')
+    parser.add_argument('--recurrent_dropout',
+            type=float,
+            default=0.0,
+            help='fraction of units to drop in recurrent state')
+    parser.add_argument('--unit_forget_bias',
+            type=bool,
+            default=False,
+            help='forget gate initialization bias')
     parser.add_argument('--data_dir',
             help='dataset location in directory in `job_dir`/sequences')
+    parser.add_argument('--model_structure',
+            default='lstm',
+            help='use lstm or gru architecture')
     args, unknown = parser.parse_known_args()
     args = args.__dict__
 
