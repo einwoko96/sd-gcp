@@ -55,6 +55,8 @@ class Trainer():
             self.output_path = os.path.join(self.job_dir,
                 os.environ['JOB_NAME'])
         self.model_structure = kwargs['model_structure']
+        self.seed = kwargs['seed']
+        self.train_split = kwargs['split']
         self.classes = []
         self.train_set = []
         self.test_set = []
@@ -109,8 +111,10 @@ class Trainer():
         steps_per_epoch = ((len(self.train_set) + len(self.test_set)) * 0.7) // self.batch_size
 
         print str(len(self.classes)) + " classes listed."
-        print str(len(self.train_set)) + " marked as training."
-        print str(len(self.test_set)) + " marked as testing."
+        print str(len(self.train_set)) + " training vectors produced."
+        print str(len(self.test_set)) + " validation vectors produced."
+
+        random.seed(time.time())
 
         training_gen = self.sequence_generator(self.train_set)
         validation_gen = self.sequence_generator(self.test_set)
@@ -148,11 +152,22 @@ class Trainer():
         return label_hot
 
     def separate_classes(self):
-        for item in glob.glob(os.path.join(self.data_dir, '*.npy')):
-            if 'train' in item:
-                self.train_set.append(os.path.basename(item))
-            elif 'test' in item:
-                self.test_set.append(os.path.basename(item))
+        vectors_by_class = [[] for i in range(len(self.classes))]
+        vector_glob = glob.glob(os.path.join(self.data_dir, '*.npy'))
+        random.seed(self.seed)
+        for item in vector_glob:
+            item_name = os.path.basename(item)
+            for label in self.classes:
+                if label.lower() == item_name.lower().split('_')[0]:
+                    vectors_by_class[self.classes.index(label)].append(
+                            item_name)
+
+        for sublist in vectors_by_class:
+            sublist.sort()
+            random.shuffle(sublist)
+            index = int(self.train_split * len(sublist))
+            self.train_set.extend(sublist[index:])
+            self.test_set.extend(sublist[:index])
 
     def sequence_generator(self, set_list):
         while True:
@@ -162,7 +177,7 @@ class Trainer():
                 name = os.path.join(self.data_dir, sample)
                 vector = np.load(name)
                 X.append(vector)
-                y.append(self.get_class_one_hot(sample.split('_')[1]))
+                y.append(self.get_class_one_hot(sample.split('_')[0]))
 
             yield np.array(X), np.array(y)
 
@@ -239,6 +254,13 @@ if __name__ == '__main__':
     parser.add_argument('--model_structure',
             default='lstm',
             help='use lstm or gru architecture')
+    parser.add_argument('--seed',
+            default=137,
+            help='random number generator seed to use for t/v split')
+    parser.add_argument('--split',
+            type=float,
+            default=0.66,
+            help='proportion of data to be used as training data')
     args, unknown = parser.parse_known_args()
     args = args.__dict__
 
