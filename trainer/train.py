@@ -5,7 +5,7 @@ import numpy as np
 import pandas as pd
 import tensorflow as tf
 import cPickle as pickle
-import time, csv, sys, argparse, random, os, glob
+import time, csv, sys, argparse, random, os, glob, re
 from tensorflow.python.lib.io import file_io
 from subprocess import call, Popen
 from keras.layers import Dense, Flatten, Dropout
@@ -41,7 +41,10 @@ class Trainer():
         self.seq_length = kwargs['seq_length']
         self.batch_size = kwargs['batch_size']
         self.job_dir = kwargs['job_dir']
-        self.unit_forget_bias = kwargs['unit_forget_bias']
+        if kwargs['unit_forget_bias'] == 'True':
+            self.unit_forget_bias = True
+        else:
+            self.unit_forget_bias = False
         self.dropout = kwargs['dropout']
         self.recurrent_dropout = kwargs['recurrent_dropout']
         self.checkpoint_path = os.path.join('/tmp', 'checkpoints')
@@ -157,8 +160,9 @@ class Trainer():
         random.seed(self.seed)
         for item in vector_glob:
             item_name = os.path.basename(item)
+            item_class = re.split("^(.*?)(_|[0-9])", item_name)[1]
             for label in self.classes:
-                if label.lower() == item_name.lower().split('_')[0]:
+                if label.lower() == item_class.lower():
                     vectors_by_class[self.classes.index(label)].append(
                             item_name)
 
@@ -166,8 +170,8 @@ class Trainer():
             sublist.sort()
             random.shuffle(sublist)
             index = int(self.train_split * len(sublist))
-            self.train_set.extend(sublist[index:])
-            self.test_set.extend(sublist[:index])
+            self.train_set.extend(sublist[:index])
+            self.test_set.extend(sublist[index:])
 
     def sequence_generator(self, set_list):
         while True:
@@ -175,9 +179,10 @@ class Trainer():
             for _ in range(self.batch_size):
                 sample = random.choice(set_list)
                 name = os.path.join(self.data_dir, sample)
+                class_name = re.split("^(.*?)(_|[0-9])", sample)[1]
                 vector = np.load(name)
                 X.append(vector)
-                y.append(self.get_class_one_hot(sample.split('_')[0]))
+                y.append(self.get_class_one_hot(class_name))
 
             yield np.array(X), np.array(y)
 
@@ -246,8 +251,8 @@ if __name__ == '__main__':
             default=0.0,
             help='fraction of units to drop in recurrent state')
     parser.add_argument('--unit_forget_bias',
-            type=bool,
-            default=False,
+            type=str,
+            default='False',
             help='forget gate initialization bias')
     parser.add_argument('--data_dir',
             help='dataset location in directory in `job_dir`/sequences')
