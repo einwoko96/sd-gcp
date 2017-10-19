@@ -38,12 +38,22 @@ def analysis(model_filename, feature_dir, output_filename):
                 X[i_file,:,:] = feature 
         y.append(model.predict(X))
         count = count+len(files)
-        
+    y_list = y    
     y = np.vstack(y)
     df = pd.DataFrame(data=y,index=col1)
     df.to_csv(output_filename,header=class_names)
-    return y
+    return y_list, class_names
 
+def top1_accuracy(y_list):
+    
+    top1 = np.zeros([len(y_list),1])
+    
+    for i_y, y in enumerate(y_list):
+        top1[i_y] = float(sum(np.argmax(y_list[i_y],1) == i_y))/float(len(y_list[i_y]))
+        
+    return top1
+
+        
 
 
     
