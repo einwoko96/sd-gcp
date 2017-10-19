@@ -42,7 +42,7 @@ def analysis(model_filename, feature_dir, output_filename):
     y = np.vstack(y)
     df = pd.DataFrame(data=y,index=col1)
     df.to_csv(output_filename,header=class_names)
-
+    return y
 
 
 
