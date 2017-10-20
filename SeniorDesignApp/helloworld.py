@@ -4,8 +4,8 @@ import sys
 tastemaker = os.path.dirname(os.getcwd())
 sys.path.append(tastemaker)
 
-from flask import Flask, render_template, send_file, request, abort, redirect
-app = Flask(__name__, template_folder='.')
+from flask import Flask, render_template, send_file, request
+app = Flask(__name__)
 
 @app.route('/')
 def root():
@@ -15,7 +15,7 @@ def root():
 def index():
     return render_template('index.html')
 
-@app.route('/video.html')
+@app.route('/video')
 def video():
     return render_template('video.html')
 

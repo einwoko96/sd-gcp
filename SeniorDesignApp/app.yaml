@@ -8,5 +8,12 @@ threadsafe: true
 api_version: 1
 
 handlers:
+- url: /favicon\.ico
+  static_files: favicon.ico
+  upload: favicon\.ico
+
+- url: /bootstrap
+  static_dir: bootstrap
+  
 - url: /.*
   script: helloworld.app
