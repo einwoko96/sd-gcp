@@ -246,9 +246,9 @@ if __name__ == '__main__':
             default=32,
             type=int,
             help='batch size per step')
-    parser.add_argument('--output_path',
+    parser.add_argument('--job_name',
             default='',
-            help='cloud output directory based on job name')
+            help='name of the job')
     parser.add_argument('--dropout',
             type=float,
             default=0.5,
