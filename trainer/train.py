@@ -52,7 +52,7 @@ class Trainer():
         if kwargs['job_type'] == 'cloud':
             self.data_dir = os.path.join('/tmp/', kwargs['data_dir'])
             self.output_path = os.path.join(kwargs['job_dir'],
-                    kwards['data_dir'] + '_' + kwargs['job_name'])
+                    kwargs['data_dir'] + '_' + kwargs['job_name'])
         else:
             self.data_dir = os.path.join(kwargs['job_dir'],
                     'sequences', kwargs['data_dir'])
