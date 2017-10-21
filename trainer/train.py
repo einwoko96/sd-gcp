@@ -51,12 +51,13 @@ class Trainer():
         self.log_path = os.path.join('/tmp', 'logs')
         if kwargs['job_type'] == 'cloud':
             self.data_dir = os.path.join('/tmp/', kwargs['data_dir'])
-            self.output_path = kwargs['output_path']
+            self.output_path = os.path.join(kwargs['job_dir'],
+                    kwards['data_dir'] + '_' + kwargs['job_name'])
         else:
             self.data_dir = os.path.join(kwargs['job_dir'],
                     'sequences', kwargs['data_dir'])
             self.output_path = os.path.join(self.job_dir,
-                os.environ['JOB_NAME'])
+                kwargs['data_dir'] + '_' + os.environ['JOB_NAME'])
         self.model_structure = kwargs['model_structure']
         self.seed = kwargs['seed']
         self.train_split = kwargs['split']

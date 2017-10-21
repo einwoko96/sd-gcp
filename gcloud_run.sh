@@ -1,6 +1,6 @@
 #!/bin/bash
 
-export JOB_NAME="lstm_train_$(date +%Y%m%d_%H%M%S)"
+export JOB_NAME="train_$(date +%Y%m%d_%H%M%S)"
 export BUCKET_NAME=lstm-training
 export JOB_DIR=gs://${BUCKET_NAME}
 export OUTPUT_PATH=gs://${BUCKET_NAME}/${JOB_NAME}
@@ -16,12 +16,12 @@ gcloud ml-engine jobs submit training "${JOB_NAME}" \
 	-- \
 	--job_type "cloud" \
 	--job_dir "${JOB_DIR}" \
-	--output_path "${OUTPUT_PATH}" \
-	--data_dir "ucf-40-final" \
+	--job_name "${JOB_NAME}" \
+	--data_dir "ucf-5-final" \
 	--split 0.66 \
 	--seed 137 \
-	--seq_length 40 \
+	--seq_length 5 \
 	--batch_size 32 \
-	--model_structure "gru" \
+	--model_structure "lstm" \
 	--recurrent_dropout 0.0 \
 	--unit_forget_bias "False"
