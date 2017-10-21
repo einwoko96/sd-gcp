@@ -3,6 +3,7 @@ import os
 import glob
 import re
 import pandas as pd
+import argparse
 from keras.models import load_model
 from tqdm import tqdm
 
@@ -70,7 +71,28 @@ def topk_accuracy(y_list,k):
     topk = np.dot(weight,topk_list)
     return topk, topk_list
     
-    
+if __name__ == '__main__':
+    parser = argparse.ArgumentParser(
+            description='Generate inferences on the holdout' +
+            'set and measure accuracy')
+    parser.add_argument('--model',
+            required=True,
+            help='path to the hdf5 model to be tested')
+    parser.add_argument('--holdout',
+            required=True,
+            help='path to data to run inferences on')
+    args, unknown = parser.parse_known_args()
+    args = args.__dict__
+
+    p, c = analysis(args['model'], args['holdout'],
+            os.path.join(os.path.dirname(args['model']), 'predictions.csv'))
+
+    t1, l1 = topk_accuracy(p, 1)
+    t5, l5 = topk_accuracy(p, 5)
+
+    print "Model: " + args['model']
+    print "Top 1 accuracy: " + str(t1)
+    print "Top 5 accuracy: " + str(t5)
 
         
 

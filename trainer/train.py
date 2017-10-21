@@ -91,7 +91,7 @@ class Trainer():
                     self.output_path, log_name)
             tb = TensorBoard(log_dir=os.path.join(self.output_path, 'tb'))
             logger = CSVLogger(log_name)
-            callbacks = [early_stopper, tb, checkpointer, logger, saver]
+            callbacks = [early_stopper, tb, logger, saver]
             df = file_io.FileIO(os.path.join(self.job_dir,
                 'class_list_' + os.path.basename(self.data_dir) + '.csv'), 'r')
         else:

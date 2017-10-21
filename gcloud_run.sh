@@ -17,10 +17,10 @@ gcloud ml-engine jobs submit training "${JOB_NAME}" \
 	--job_type "cloud" \
 	--job_dir "${JOB_DIR}" \
 	--output_path "${OUTPUT_PATH}" \
-	--data_dir "ucf-5-final" \
+	--data_dir "ucf-40-final" \
 	--split 0.66 \
 	--seed 137 \
-	--seq_length 5 \
+	--seq_length 40 \
 	--batch_size 32 \
 	--model_structure "gru" \
 	--recurrent_dropout 0.0 \
