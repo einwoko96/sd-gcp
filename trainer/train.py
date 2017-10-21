@@ -110,6 +110,10 @@ class Trainer():
                 'class_list_' + os.path.basename(self.data_dir) + '.csv'),'r')
 
         self.classes = df.read().strip('\r\n').lower().split(',')
+
+        print str(len(glob.glob(os.path.join(self.data_dir, '*.npy')))) \
+                + " vectors listed in " + self.data_dir + "."
+
         self.separate_classes()
         steps_per_epoch = ((len(self.train_set) + len(self.test_set)) * 0.7) // self.batch_size
 
@@ -159,6 +163,8 @@ class Trainer():
         vector_glob = glob.glob(os.path.join(self.data_dir, '*.npy'))
         random.seed(self.seed)
         for item in vector_glob:
+            if np.load(item).shape != (self.seq_length, 2048):
+                continue
             item_name = os.path.basename(item)
             item_class = re.split("^(.*?)(_|[0-9])", item_name)[1]
             for label in self.classes:
