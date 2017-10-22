@@ -25,7 +25,7 @@ class CloudCheckpoint(keras.callbacks.Callback):
     def on_epoch_end(self, epoch, logs={}):
         print self.output_path
         print self.log_name
-        Popen(['gsutil', 'cp', self.log_name,
+        Popen(['gsutil', '--quiet', 'cp', self.log_name,
             os.path.join(self.output_path, os.path.basename(self.log_name))],
             stdin=None, stdout=None,
             stderr=None, close_fds=True)
@@ -74,9 +74,11 @@ class Trainer():
 
         # Open files from cloud or locally for data file and training set
         if self.job_type == 'cloud':
-            call(['gsutil', '-m', 'cp', '-r',
+            print "Beginning dataset transfer."
+            call(['gsutil', '--quiet', '-m', 'cp', '-r',
                 os.path.join(self.job_dir, 'sequences',
                     os.path.basename(self.data_dir)), '/tmp'])
+            print "Dataset transfer complete."
             try:
                 os.mkdir(self.checkpoint_path)
                 os.mkdir(self.log_path)
@@ -140,7 +142,7 @@ class Trainer():
                 generator=training_gen,
                 steps_per_epoch=steps_per_epoch,
                 epochs=nb_epoch,
-                verbose=1,
+                verbose=0,
                 callbacks=callbacks,
                 validation_data=validation_gen,
                 validation_steps=10)

@@ -17,11 +17,11 @@ gcloud ml-engine jobs submit training "${JOB_NAME}" \
 	--job_type "cloud" \
 	--job_dir "${JOB_DIR}" \
 	--job_name "${JOB_NAME}" \
-	--data_dir "ucf-5-final" \
+	--data_dir "kinetics-10" \
 	--split 0.66 \
 	--seed 137 \
-	--seq_length 5 \
+	--seq_length 10 \
 	--batch_size 32 \
-	--model_structure "lstm" \
+	--model_structure "gru" \
 	--recurrent_dropout 0.0 \
 	--unit_forget_bias "False"
