@@ -1,7 +1,7 @@
 #!/bin/bash
 
 export JOB_NAME="train_$(date +%Y%m%d_%H%M%S)"
-export DATA_DIR="ucf-10-final"
+export DATA_DIR="kinetics-10"
 export SEQ_LENGTH=10
 
 python2 trainer/train.py \
