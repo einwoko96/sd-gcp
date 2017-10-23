@@ -1,6 +1,6 @@
 #!/bin/bash
 
-export JOB_NAME="train_$(date +%Y%m%d_%H%M%S)"
+export JOB_NAME="tr$(date +%Y%m%d_%H%M%S)"
 export BUCKET_NAME=lstm-training
 export JOB_DIR=gs://${BUCKET_NAME}
 export OUTPUT_PATH=gs://${BUCKET_NAME}/${JOB_NAME}

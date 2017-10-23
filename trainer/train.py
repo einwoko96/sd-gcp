@@ -53,11 +53,13 @@ class Trainer():
             self.data_dir = os.path.join('/tmp/', kwargs['data_dir'])
             self.output_path = os.path.join(kwargs['job_dir'],
                     kwargs['data_dir'] + '_' + kwargs['job_name'])
+            self.job_name = kwargs['job_name']
         else:
             self.data_dir = os.path.join(kwargs['job_dir'],
                     'sequences', kwargs['data_dir'])
             self.output_path = os.path.join(self.job_dir,
                 kwargs['data_dir'] + '_' + os.environ['JOB_NAME'])
+            self.job_name = os.environ['JOB_NAME']
         self.model_structure = kwargs['model_structure']
         self.seed = kwargs['seed']
         self.train_split = kwargs['split']
@@ -85,14 +87,14 @@ class Trainer():
             except OSError:
                 pass
             log_name = os.path.join(self.log_path,
-                    'lstm_train_' + str(timestamp) + '.log')
+                    self.job_name + '.log')
             checkpointer = ModelCheckpoint(
                     filepath=os.path.join(self.checkpoint_path,
                     '{epoch}.hdf5'),
                     verbose=1, save_best_only=True)
             saver = CloudCheckpoint(self.checkpoint_path,
                     self.output_path, log_name)
-            tb = TensorBoard(log_dir=os.path.join(self.output_path, 'tb'))
+            tb = TensorBoard(log_dir=self.output_path)
             logger = CSVLogger(log_name)
             callbacks = [early_stopper, tb, logger, saver]
             df = file_io.FileIO(os.path.join(self.job_dir,
@@ -106,9 +108,9 @@ class Trainer():
                     save_best_only=True)
             tb = TensorBoard(log_dir=self.output_path)
             csv_log_name = os.path.join(self.output_path,
-                    str(timestamp) + '.log')
+                    self.job_name + '.log')
             csv_logger = CSVLogger(csv_log_name)
-            callbacks = [checkpointer, tb, early_stopper, csv_logger]
+            callbacks = [tb, early_stopper, csv_logger]
             df = open(os.path.join(self.job_dir,
                 'class_list_' + os.path.basename(self.data_dir) + '.csv'),'r')
 
@@ -118,7 +120,7 @@ class Trainer():
                 + " vectors listed in " + self.data_dir + "."
 
         self.separate_classes()
-        steps_per_epoch = ((len(self.train_set) + len(self.test_set)) * 0.7) // self.batch_size
+        steps_per_epoch = ((len(self.train_set) + len(self.test_set))) // self.batch_size
 
         print str(len(self.classes)) + " classes listed."
         print str(len(self.train_set)) + " training vectors produced."
@@ -142,7 +144,7 @@ class Trainer():
                 generator=training_gen,
                 steps_per_epoch=steps_per_epoch,
                 epochs=nb_epoch,
-                verbose=0,
+                verbose=1,
                 callbacks=callbacks,
                 validation_data=validation_gen,
                 validation_steps=10)
