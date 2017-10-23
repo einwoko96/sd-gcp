@@ -90,9 +90,9 @@ if __name__ == '__main__':
     t1, l1 = topk_accuracy(p, 1)
     t5, l5 = topk_accuracy(p, 5)
 
-    print "Model: " + args['model']
-    print "Top 1 accuracy: " + str(t1)
-    print "Top 5 accuracy: " + str(t5)
+    print ("Model: " + args['model'])
+    print ("Top 1 accuracy: " + str(t1))
+    print ("Top 5 accuracy: " + str(t5))
 
         
 
