@@ -1,14 +1,14 @@
 #!/bin/bash
 
-export JOB_NAME="train_$(date +%Y%m%d_%H%M%S)"
-export DATA_DIR="kinetics-10"
-export SEQ_LENGTH=10
+export JOB_NAME="tr_$(date +%Y%m%d_%H%M%S)"
+export DATA_DIR="kinetics-40"
+export SEQ_LENGTH=40
 
 python2 trainer/train.py \
 	--job_type local \
 	--job_dir $(pwd) \
 	--data_dir "${DATA_DIR}" \
-        --split 0.66 \
+        --split 0.80 \
         --seed 137 \
         --seq_length ${SEQ_LENGTH} \
         --batch_size 32 \
