@@ -16,4 +16,4 @@ handlers:
   static_dir: bootstrap
   
 - url: /.*
-  script: helloworld.app
+  script: sd_lstm.app
