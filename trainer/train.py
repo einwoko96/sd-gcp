@@ -52,13 +52,13 @@ class Trainer():
         if kwargs['job_type'] == 'cloud':
             self.data_dir = os.path.join('/tmp/', kwargs['data_dir'])
             self.output_path = os.path.join(kwargs['job_dir'],
-                    kwargs['data_dir'] + '_' + kwargs['job_name'])
+                    kwargs['job_name'])
             self.job_name = kwargs['job_name']
         else:
             self.data_dir = os.path.join(kwargs['job_dir'],
                     'sequences', kwargs['data_dir'])
             self.output_path = os.path.join(self.job_dir,
-                kwargs['data_dir'] + '_' + os.environ['JOB_NAME'])
+                os.environ['JOB_NAME'])
             self.job_name = os.environ['JOB_NAME']
         self.model_structure = kwargs['model_structure']
         self.seed = kwargs['seed']
@@ -71,16 +71,16 @@ class Trainer():
 
         nb_epoch = 1000
         timestamp = time.time()
-        model_name = "trained-" + str(timestamp) + ".hdf5"
+        model_name = "trained-" + self.job_name + ".hdf5"
         early_stopper = EarlyStopping(patience=10)
 
         # Open files from cloud or locally for data file and training set
         if self.job_type == 'cloud':
-            print "Beginning dataset transfer."
+            print str(time.time) + " Beginning dataset transfer."
             call(['gsutil', '--quiet', '-m', 'cp', '-r',
                 os.path.join(self.job_dir, 'sequences',
                     os.path.basename(self.data_dir)), '/tmp'])
-            print "Dataset transfer complete."
+            print str(time.time) + " Dataset transfer complete."
             try:
                 os.mkdir(self.checkpoint_path)
                 os.mkdir(self.log_path)
@@ -119,26 +119,30 @@ class Trainer():
         print str(len(glob.glob(os.path.join(self.data_dir, '*.npy')))) \
                 + " vectors listed in " + self.data_dir + "."
 
+        print str(time.time) + " Producing split."
         self.separate_classes()
         steps_per_epoch = ((len(self.train_set) + len(self.test_set))) // self.batch_size
 
-        print str(len(self.classes)) + " classes listed."
-        print str(len(self.train_set)) + " training vectors produced."
-        print str(len(self.test_set)) + " validation vectors produced."
+        print str(time.time) + " " + str(len(self.classes)) \
+                + " classes listed."
+        print str(time.time) + " " + str(len(self.train_set)) \
+                + " training vectors produced."
+        print str(time.time) + "" + str(len(self.test_set)) \
+                + " validation vectors produced."
 
         random.seed(time.time())
 
         training_gen = self.sequence_generator(self.train_set)
         validation_gen = self.sequence_generator(self.test_set)
 
-        print "Building model..."
+        print str(time.time) + " Building model..."
 
         if self.model_structure == 'lstm':
             rm = self.build_lstm()
         elif self.model_structure == 'gru':
             rm = self.build_gru()
 
-        print "Starting up fit_generator..."
+        print str(time.time) + " Starting up fit_generator..."
 
         hist = rm.fit_generator(
                 generator=training_gen,
@@ -147,7 +151,8 @@ class Trainer():
                 verbose=1,
                 callbacks=callbacks,
                 validation_data=validation_gen,
-                validation_steps=10)
+                validation_steps=10,
+                max_queue_size=10)
 
     
         if self.job_type == 'cloud':

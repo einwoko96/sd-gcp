@@ -1,7 +1,7 @@
 #!/bin/bash
 
-export JOB_NAME="tr_$(date +%Y%m%d_%H%M%S)"
-export DATA_DIR="kinetics-40"
+export JOB_NAME="train_$(date +%Y%m%d_%H%M%S)"
+export DATA_DIR="ucf-40-final"
 export SEQ_LENGTH=40
 
 python2 trainer/train.py \
@@ -13,5 +13,5 @@ python2 trainer/train.py \
         --seq_length ${SEQ_LENGTH} \
         --batch_size 32 \
         --model_structure "gru" \
-        --recurrent_dropout 0.0 \
+        --recurrent_dropout 0.25 \
         --unit_forget_bias "False"
