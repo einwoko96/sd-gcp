@@ -4,7 +4,6 @@ Train our RNN on bottlecap or prediction files generated from our CNN.
 import numpy as np
 import pandas as pd
 import tensorflow as tf
-import cPickle as pickle
 import time, csv, sys, argparse, random, os, glob, re
 from tensorflow.python.lib.io import file_io
 from subprocess import call, Popen
@@ -15,6 +14,7 @@ from keras.optimizers import Adam
 import keras.callbacks
 from keras.callbacks import TensorBoard, ModelCheckpoint, EarlyStopping, CSVLogger
 from keras.utils import np_utils
+from datetime import datetime
 
 class CloudCheckpoint(keras.callbacks.Callback):
     def __init__(self, checkpoint_path, output_path, log_name):
@@ -76,11 +76,11 @@ class Trainer():
 
         # Open files from cloud or locally for data file and training set
         if self.job_type == 'cloud':
-            print str(time.time()) + " Beginning dataset transfer."
+            print str(datetime.now()) + " Beginning dataset transfer."
             call(['gsutil', '--quiet', '-m', 'cp', '-r',
                 os.path.join(self.job_dir, 'sequences',
                     os.path.basename(self.data_dir)), '/tmp'])
-            print str(time.time()) + " Dataset transfer complete."
+            print str(datetime.now()) + " Dataset transfer complete."
             try:
                 os.mkdir(self.checkpoint_path)
                 os.mkdir(self.log_path)
@@ -119,15 +119,15 @@ class Trainer():
         print str(len(glob.glob(os.path.join(self.data_dir, '*.npy')))) \
                 + " vectors listed in " + self.data_dir + "."
 
-        print str(time.time()) + " Producing split."
+        print str(datetime.now()) + " Producing split."
         self.separate_classes()
         steps_per_epoch = ((len(self.train_set) + len(self.test_set))) // self.batch_size
 
-        print str(time.time()) + " " + str(len(self.classes)) \
+        print str(datetime.now()) + " " + str(len(self.classes)) \
                 + " classes listed."
-        print str(time.time()) + " " + str(len(self.train_set)) \
+        print str(datetime.now()) + " " + str(len(self.train_set)) \
                 + " training vectors produced."
-        print str(time.time()) + "" + str(len(self.test_set)) \
+        print str(datetime.now()) + "" + str(len(self.test_set)) \
                 + " validation vectors produced."
 
         random.seed(time.time())
@@ -135,14 +135,14 @@ class Trainer():
         training_gen = self.sequence_generator(self.train_set)
         validation_gen = self.sequence_generator(self.test_set)
 
-        print str(time.time()) + " Building model..."
+        print str(datetime.now()) + " Building model..."
 
         if self.model_structure == 'lstm':
             rm = self.build_lstm()
         elif self.model_structure == 'gru':
             rm = self.build_gru()
 
-        print str(time.time()) + " Starting up fit_generator..."
+        print str(datetime.now()) + " Starting up fit_generator..."
 
         hist = rm.fit_generator(
                 generator=training_gen,

@@ -1,6 +1,6 @@
 #!/bin/bash
 
-export JOB_NAME="train_$(date +%Y%m%d_%H%M%S)"
+export JOB_NAME="kinetics_train_$(date +%Y%m%d_%H%M%S)"
 export DATA_DIR="kinetics-40"
 export SEQ_LENGTH=40
 
