@@ -2,7 +2,6 @@
 Train our RNN on bottlecap or prediction files generated from our CNN.
 """
 import numpy as np
-import pandas as pd
 import tensorflow as tf
 import time, csv, sys, argparse, random, os, glob, re
 from tensorflow.python.lib.io import file_io
@@ -127,7 +126,7 @@ class Trainer():
                 + " classes listed."
         print str(datetime.now()) + " " + str(len(self.train_set)) \
                 + " training vectors produced."
-        print str(datetime.now()) + "" + str(len(self.test_set)) \
+        print str(datetime.now()) + " " + str(len(self.test_set)) \
                 + " validation vectors produced."
 
         random.seed(time.time())
@@ -275,13 +274,6 @@ if __name__ == '__main__':
     parser.add_argument('--model_structure',
             default='lstm',
             help='use lstm or gru architecture')
-    parser.add_argument('--seed',
-            default=137,
-            help='random number generator seed to use for t/v split')
-    parser.add_argument('--split',
-            type=float,
-            default=0.66,
-            help='proportion of data to be used as training data')
     args, unknown = parser.parse_known_args()
     args = args.__dict__
 
