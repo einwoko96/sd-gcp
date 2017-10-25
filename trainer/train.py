@@ -3,6 +3,7 @@ Train our RNN on bottlecap or prediction files generated from our CNN.
 """
 import numpy as np
 import tensorflow as tf
+import cPickle as pickle
 import time, csv, sys, argparse, random, os, glob, re
 from tensorflow.python.lib.io import file_io
 from subprocess import call, Popen
@@ -168,25 +169,12 @@ class Trainer():
         return label_hot
 
     def separate_classes(self):
-        vectors_by_class = [[] for i in range(len(self.classes))]
-        vector_glob = glob.glob(os.path.join(self.data_dir, '*.npy'))
-        random.seed(self.seed)
-        for item in vector_glob:
-            if np.load(item).shape != (self.seq_length, 2048):
-                continue
-            item_name = os.path.basename(item)
-            item_class = re.split("^(.*?)(_|[0-9])", item_name)[1]
-            for label in self.classes:
-                if label.lower() == item_class.lower():
-                    vectors_by_class[self.classes.index(label)].append(
-                            item_name)
-
-        for sublist in vectors_by_class:
-            sublist.sort()
-            random.shuffle(sublist)
-            index = int(self.train_split * len(sublist))
-            self.train_set.extend(sublist[:index])
-            self.test_set.extend(sublist[index:])
+        self.train_set = pickle.load(file_io.FileIO(
+            os.path.join(self.job_dir,
+                os.path.basename(self.data_dir) + '_train.pkl')), 'rb')
+        self.test_set = pickle.load(file_io.FileIO(
+            os.path.join(self.job_dir,
+                os.path.basename(self.data_dir) + '_test.pkl')), 'rb')
 
     def sequence_generator(self, set_list):
         while True:

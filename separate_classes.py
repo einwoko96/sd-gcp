@@ -47,4 +47,9 @@ with open(os.path.basename(args['data_dir]') + '_train.pkl', 'wb') as f:
 
 with open(os.path.basename(args['data_dir']) + '_test.pkl', 'wb') as f:
     pickle.dump(test_set, f)
-    #call(gsutil mv f gs://lstm-training
+
+if args['export'] is not None:
+    call(['gsutil', 'mv' , os.path.basename(args['data_dir']) + '_train.pkl',
+        os.environ['JOB_DIR']])
+    call(['gsutil', 'mv', os.path.basename(args['data_dir']) + '_test.pkl',
+        os.environ['JOB_DIR']])

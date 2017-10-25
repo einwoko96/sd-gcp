@@ -19,6 +19,7 @@ python separate_classes.py \
 	--seed 137 \
 	--split "${SPLIT}" \
 	--data_dir "${DATA_DIR}" \
+	--seq_length "${SEQ_LENGTH}" \
 	--export
 
 gcloud ml-engine jobs submit training "${JOB_NAME}" \
