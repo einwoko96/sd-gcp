@@ -61,8 +61,6 @@ class Trainer():
                 os.environ['JOB_NAME'])
             self.job_name = os.environ['JOB_NAME']
         self.model_structure = kwargs['model_structure']
-        self.seed = kwargs['seed']
-        self.train_split = kwargs['split']
         self.classes = []
         self.train_set = []
         self.test_set = []
@@ -119,9 +117,9 @@ class Trainer():
         print str(len(glob.glob(os.path.join(self.data_dir, '*.npy')))) \
                 + " vectors listed in " + self.data_dir + "."
 
-        print str(datetime.now()) + " Producing split."
+        print str(datetime.now()) + " Reading dataset."
         self.separate_classes()
-        steps_per_epoch = ((len(self.train_set) + len(self.test_set))) // self.batch_size
+        steps_per_epoch = (len(self.train_set) + len(self.test_set)) // self.batch_size
 
         print str(datetime.now()) + " " + str(len(self.classes)) \
                 + " classes listed."
@@ -171,10 +169,10 @@ class Trainer():
     def separate_classes(self):
         self.train_set = pickle.load(file_io.FileIO(
             os.path.join(self.job_dir,
-                os.path.basename(self.data_dir) + '_train.pkl')), 'rb')
+                self.job_name + '_train.pkl'), 'rb'))
         self.test_set = pickle.load(file_io.FileIO(
             os.path.join(self.job_dir,
-                os.path.basename(self.data_dir) + '_test.pkl')), 'rb')
+                self.job_name + '_test.pkl'), 'rb'))
 
     def sequence_generator(self, set_list):
         while True:
