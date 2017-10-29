@@ -2,7 +2,7 @@
 
 set -e
 
-export JOB_NAME="kinetics_train_$(date +%Y%m%d_%H%M%S)"
+export JOB_NAME="test"
 DATA_DIR="kinetics-40"
 CLASS_LIST="class_list_${DATA_DIR}.csv"
 SPLIT=0.80
@@ -15,7 +15,8 @@ python separate_classes.py \
 	--data_dir "${DATA_DIR}" \
 	--seq_length "${SEQ_LENGTH}" \
 	--classes "${CLASS_LIST}" \
-	--job_name "${JOB_NAME}"
+	--job_name "${JOB_NAME}" \
+	--cross
 
 python trainer/train.py \
 	--job_type local \
