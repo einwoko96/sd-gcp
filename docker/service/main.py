@@ -12,6 +12,9 @@ from predict import predict
 import urllib
 from multiprocessing import Pool
 import requests
+from keras.models import load_model
+from predict import download_file_from_google_drive
+import os
 
 app = Flask(__name__)
 
@@ -39,9 +42,9 @@ def pred():
     X = np.loadtxt(data)
     test = np.zeros([1,np.shape(X)[0], np.shape(X)[1]])
     test[0,:,:] = X
-
-    predicts = predict(test)
-    preds = predicts
+    if not 'trained_lstm_model' in globals():
+        init_model()
+    preds = trained_lstm_model.predict(test)
     classes = ["Apply Eye Makeup","Apply Lipstick","Archery","Baby Crawling","Balance Beam","Band Marching","Baseball Pitch","Basketball Shooting","Basketball Dunk","Bench Press","Biking","Billiards Shot","Blow Dry Hair","Blowing Candles","Body Weight Squats","Bowling","Boxing Punching Bag","Boxing Speed Bag","Breaststroke","Brushing Teeth","Clean and Jerk","Cliff Diving","Cricket Bowling","Cricket Shot","Cutting In Kitchen","Diving","Drumming","Fencing","Field Hockey Penalty","Floor Gymnastics","Frisbee Catch","Front Crawl","Golf Swing","Haircut","Hammer Throw","Hammering","Handstand Pushups","Handstand Walking","Head Massage","High Jump","Horse Race","Horse Riding","Hula Hoop","Ice Dancing","Javelin Throw","Juggling Balls","Jump Rope","Jumping Jack","Kayaking","Knitting","Long Jump","Lunges","Military Parade","Mixing Batter","Mopping Floor","Nun chucks","Parallel Bars","Pizza Tossing","Playing Guitar","Playing Piano","Playing Tabla","Playing Violin","Playing Cello","Playing Daf","Playing Dhol","Playing Flute","Playing Sitar","Pole Vault","Pommel Horse","Pull Ups","Punch","Push Ups","Rafting","Rock Climbing Indoor","Rope Climbing","Rowing","Salsa Spins","Shaving Beard","Shotput","Skate Boarding","Skiing","Skijet","Sky Diving","Soccer Juggling","Soccer Penalty","Still Rings","Sumo Wrestling","Surfing","Swing","Table Tennis Shot","Tai Chi","Tennis Swing","Throw Discus","Trampoline Jumping","Typing","Uneven Bars","Volleyball Spiking","Walking with a dog","Wall Pushups","Writing On Board","Yo Yo"]
 
     top1 = classes[np.argmax(preds[0])]
@@ -64,6 +67,18 @@ def pred():
 
     return jsonify(predictions=predictions)
 
-
+def init_model():
+    global trained_lstm_model
+    file_id = '0BxnNE6IbgiIJUTNtUVpiNjFIeVU'
+    destination = 'tools/lstm-features.062-1.015.hdf5'
+    if os.path.isfile(destination):
+        print('Found model: ',destination)
+    else: 
+        print('Downloading ' + destination + '...')
+        download_file_from_google_drive(file_id, destination)
+    print('loading model...')
+    trained_lstm_model = load_model(destination)
+    
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000, debug=True)
+#    init_model()
