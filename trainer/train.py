@@ -2,7 +2,6 @@
 Train our RNN on bottlecap or prediction files generated from our CNN.
 """
 import numpy as np
-import pandas as pd
 import tensorflow as tf
 import cPickle as pickle
 import time, csv, sys, argparse, random, os, glob, re
@@ -15,6 +14,7 @@ from keras.optimizers import Adam
 import keras.callbacks
 from keras.callbacks import TensorBoard, ModelCheckpoint, EarlyStopping, CSVLogger
 from keras.utils import np_utils
+from datetime import datetime
 
 class CloudCheckpoint(keras.callbacks.Callback):
     def __init__(self, checkpoint_path, output_path, log_name):
@@ -52,17 +52,15 @@ class Trainer():
         if kwargs['job_type'] == 'cloud':
             self.data_dir = os.path.join('/tmp/', kwargs['data_dir'])
             self.output_path = os.path.join(kwargs['job_dir'],
-                    kwargs['data_dir'] + '_' + kwargs['job_name'])
+                    kwargs['job_name'])
             self.job_name = kwargs['job_name']
         else:
             self.data_dir = os.path.join(kwargs['job_dir'],
                     'sequences', kwargs['data_dir'])
             self.output_path = os.path.join(self.job_dir,
-                kwargs['data_dir'] + '_' + os.environ['JOB_NAME'])
+                os.environ['JOB_NAME'])
             self.job_name = os.environ['JOB_NAME']
         self.model_structure = kwargs['model_structure']
-        self.seed = kwargs['seed']
-        self.train_split = kwargs['split']
         self.classes = []
         self.train_set = []
         self.test_set = []
@@ -71,16 +69,16 @@ class Trainer():
 
         nb_epoch = 1000
         timestamp = time.time()
-        model_name = "trained-" + str(timestamp) + ".hdf5"
+        model_name = "trained-" + self.job_name + ".hdf5"
         early_stopper = EarlyStopping(patience=10)
 
         # Open files from cloud or locally for data file and training set
         if self.job_type == 'cloud':
-            print "Beginning dataset transfer."
+            print str(datetime.now()) + " Beginning dataset transfer."
             call(['gsutil', '--quiet', '-m', 'cp', '-r',
                 os.path.join(self.job_dir, 'sequences',
                     os.path.basename(self.data_dir)), '/tmp'])
-            print "Dataset transfer complete."
+            print str(datetime.now()) + " Dataset transfer complete."
             try:
                 os.mkdir(self.checkpoint_path)
                 os.mkdir(self.log_path)
@@ -119,26 +117,30 @@ class Trainer():
         print str(len(glob.glob(os.path.join(self.data_dir, '*.npy')))) \
                 + " vectors listed in " + self.data_dir + "."
 
+        print str(datetime.now()) + " Reading dataset."
         self.separate_classes()
-        steps_per_epoch = ((len(self.train_set) + len(self.test_set))) // self.batch_size
+        steps_per_epoch = (len(self.train_set) + len(self.test_set)) // self.batch_size
 
-        print str(len(self.classes)) + " classes listed."
-        print str(len(self.train_set)) + " training vectors produced."
-        print str(len(self.test_set)) + " validation vectors produced."
+        print str(datetime.now()) + " " + str(len(self.classes)) \
+                + " classes listed."
+        print str(datetime.now()) + " " + str(len(self.train_set)) \
+                + " training vectors produced."
+        print str(datetime.now()) + " " + str(len(self.test_set)) \
+                + " validation vectors produced."
 
         random.seed(time.time())
 
         training_gen = self.sequence_generator(self.train_set)
         validation_gen = self.sequence_generator(self.test_set)
 
-        print "Building model..."
+        print str(datetime.now()) + " Building model..."
 
         if self.model_structure == 'lstm':
             rm = self.build_lstm()
         elif self.model_structure == 'gru':
             rm = self.build_gru()
 
-        print "Starting up fit_generator..."
+        print str(datetime.now()) + " Starting up fit_generator..."
 
         hist = rm.fit_generator(
                 generator=training_gen,
@@ -147,7 +149,8 @@ class Trainer():
                 verbose=1,
                 callbacks=callbacks,
                 validation_data=validation_gen,
-                validation_steps=10)
+                validation_steps=10,
+                max_queue_size=10)
 
     
         if self.job_type == 'cloud':
@@ -164,25 +167,12 @@ class Trainer():
         return label_hot
 
     def separate_classes(self):
-        vectors_by_class = [[] for i in range(len(self.classes))]
-        vector_glob = glob.glob(os.path.join(self.data_dir, '*.npy'))
-        random.seed(self.seed)
-        for item in vector_glob:
-            if np.load(item).shape != (self.seq_length, 2048):
-                continue
-            item_name = os.path.basename(item)
-            item_class = re.split("^(.*?)(_|[0-9])", item_name)[1]
-            for label in self.classes:
-                if label.lower() == item_class.lower():
-                    vectors_by_class[self.classes.index(label)].append(
-                            item_name)
-
-        for sublist in vectors_by_class:
-            sublist.sort()
-            random.shuffle(sublist)
-            index = int(self.train_split * len(sublist))
-            self.train_set.extend(sublist[:index])
-            self.test_set.extend(sublist[index:])
+        self.train_set = pickle.load(file_io.FileIO(
+            os.path.join(self.job_dir,
+                self.job_name + '_train.pkl'), 'rb'))
+        self.test_set = pickle.load(file_io.FileIO(
+            os.path.join(self.job_dir,
+                self.job_name + '_test.pkl'), 'rb'))
 
     def sequence_generator(self, set_list):
         while True:
@@ -270,13 +260,6 @@ if __name__ == '__main__':
     parser.add_argument('--model_structure',
             default='lstm',
             help='use lstm or gru architecture')
-    parser.add_argument('--seed',
-            default=137,
-            help='random number generator seed to use for t/v split')
-    parser.add_argument('--split',
-            type=float,
-            default=0.66,
-            help='proportion of data to be used as training data')
     args, unknown = parser.parse_known_args()
     args = args.__dict__
 
