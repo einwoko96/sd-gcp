@@ -51,15 +51,22 @@ def fetch_predictions(vid_url, f):
     # opener = urllib2.build_opener(keepalive_handler)
     # urllib2.install_opener(opener)
     req = requests.get(server_url, data=data, headers={'Content-Type': 'application/json'}, timeout=120)
-    predictions = req.json()
+    predictions = req.text
 
     # try:
     #     f = urllib2.urlopen(req)
     #     predictions = json.loads(f.read())
     # except urllib2.HTTPError as e:
     #     logging.exception(e)
-
-    logging.info('Predictions: %s', predictions)
+    # logging.info('Predictions: %s', type(predictions))
+    try:
+        predictions = json.loads(predictions)
+        predictions = predictions['predictions']
+        # for key, value in predictions.iterrows():
+        #     print(key)
+        #     print(value)
+    except Exception:
+        logging.info('DIDNT WORK')
 
     return predictions
 
@@ -86,6 +93,7 @@ def predict():
         video_url = upload_video_file(vid_stream, filename, content_type)
 
         predictions = fetch_predictions(vid_url=video_url, f=filename)
+        # logging.info("down here predictions, " predictions)
 
         try:
             top1 = predictions["label1"]
