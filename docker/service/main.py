@@ -25,6 +25,7 @@ def pred():
         return jsonify(status_code='400', msg='Bad Request'), 400
 
     data = "https://sd-lstm.appspot.com.storage.googleapis.com/terrain_w1anmt8er__PM-2017-10-23-000514.mp4"
+    data = "tools/juggling.mp4"
     print(data[data.rfind("/")+1:])
     if 'http' in data:
         cmd = "./tools/convert_http.sh " + data[:data.rfind(".")] + " tools/" + data[data.rfind("/")+1:data.rfind(".")]

@@ -22,6 +22,10 @@ FRAMES_PER_VIDEO = "5"
 FRAME_RATE = "fps=1/1"          # frames per second(s)
 START_TIME = "00:00:00"
 
+def getLength(input_video):
+    duration = subprocess.check_output(['ffprobe', '-i', input_video, '-show_entries', 'format=duration', '-v', 'quiet', '-of', 'csv=%s' % ("p=0")])
+    return duration
+
 def extracted(video):
     vid_frame = re.sub(r'\.\w{3}', '-0001.jpg', video)
     return bool(os.path.exists(vid_frame))
@@ -39,8 +43,10 @@ def get_frames(video):
         frame_output_path = re.sub(r'\.\w{3}', '-%04d.jpg', video)
         
     try:
-        # "-ss", START_TIME, "-filter:v", FRAME_RATE,
-        ret = subprocess.call(["ffmpeg", "-i", video, "-vframes", FRAMES_PER_VIDEO, frame_output_path])
+        duration = getLength(video)
+        frame_dest_name = video
+        ret = subprocess.call(["ffmpeg", "-i", video, "-filter:v", "fps=" + str(float(FRAMES_PER_VIDEO)/float(duration)), "-vframes", FRAMES_PER_VIDEO, frame_output_path])
+        # ret = subprocess.call(["ffmpeg", "-i", video, "-vframes", FRAMES_PER_VIDEO, frame_output_path])
     except Exception:
         pass
 

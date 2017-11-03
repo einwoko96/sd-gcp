@@ -46,25 +46,15 @@ def fetch_predictions(vid_url, f):
     values = { 'username': username, 'password': password, 'data': vid_url, 'file_name': f}
     print(f)
     data = json.dumps(values)
-    # req = urllib2.Request(server_url, data, {'Content-Type': 'application/json'})
-    # keepalive_handler = HTTPHandler()
-    # opener = urllib2.build_opener(keepalive_handler)
-    # urllib2.install_opener(opener)
-    req = requests.get(server_url, data=data, headers={'Content-Type': 'application/json'}, timeout=120)
-    predictions = req.text
 
-    # try:
-    #     f = urllib2.urlopen(req)
-    #     predictions = json.loads(f.read())
-    # except urllib2.HTTPError as e:
-    #     logging.exception(e)
-    # logging.info('Predictions: %s', type(predictions))
+    req = requests.get(server_url, data=data, headers={'Content-Type': 'application/json'}, timeout=120)
+    predictions = req.json()
+
+    logging.info('Prediction Type 1: %s', type(predictions))
     try:
-        predictions = json.loads(predictions)
         predictions = predictions['predictions']
-        # for key, value in predictions.iterrows():
-        #     print(key)
-        #     print(value)
+        logging.info('Prediction Type 2: %s', type(predictions))
+        
     except Exception:
         logging.info('DIDNT WORK')
 
