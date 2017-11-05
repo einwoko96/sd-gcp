@@ -1,2 +1,2 @@
 #!/bin/bash
-$(ffmpeg -i $1.mp4 -vcodec copy -acodec copy $1.avi -y)
+$(ffmpeg -i $1 -vcodec copy -acodec copy $2.avi -y)
