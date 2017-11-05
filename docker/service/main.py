@@ -28,7 +28,7 @@ def pred():
     except Exception:
         return jsonify(status_code='400', msg='Bad Request'), 400
 
-    data = "https://sd-lstm.appspot.com.storage.googleapis.com/terrain_w1anmt8er__PM-2017-10-23-000514.mp4"
+    # data = "https://sd-lstm.appspot.com.storage.googleapis.com/terrain_w1anmt8er__PM-2017-10-23-000514.mp4"
     # data = "tools/juggling.MOV"
     current_app.logger.info('Data: %s', data)
 
