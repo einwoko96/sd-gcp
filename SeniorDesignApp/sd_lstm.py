@@ -44,10 +44,10 @@ def fetch_predictions(vid_url, f):
     password = 'dogclock'
     server_url = current_app.config['PREDICTION_SERVICE_URL']
     values = { 'username': username, 'password': password, 'data': vid_url, 'file_name': f}
-    print(f)
     data = json.dumps(values)
+    logging.info('URL: %s', vid_url)
 
-    req = requests.get(server_url, data=data, headers={'Content-Type': 'application/json'}, timeout=120)
+    req = requests.post(server_url, data=data, headers={'Content-Type': 'application/json'}, timeout=180)
     predictions = req.json()
 
     logging.info('Prediction Type 1: %s', type(predictions))
@@ -80,28 +80,37 @@ def predict():
         vid_stream = vid.read()
         filename = vid.filename
         content_type = vid.content_type
+
+        temp = filename[:filename.rfind(".")]
+        temp = temp.replace(".", "-")
+        filename = temp + filename[filename.rfind("."):]
+
         video_url = upload_video_file(vid_stream, filename, content_type)
 
         predictions = fetch_predictions(vid_url=video_url, f=filename)
-        # logging.info("down here predictions, " predictions)
 
         try:
             top1 = predictions["label1"]
-
             top2 = predictions["label2"]
-
             top3 = predictions["label3"]
-
             top4 = predictions["label4"]
-
             top5 = predictions["label5"]
 
-            return render_template('video.html', video_url=video_url, file_name=filename, one=top1, two=top2, three=top3, four=top4, five=top5)
-        except Exception:
+            prob1 = predictions["prob1"]
+            prob2 = predictions["prob2"]
+            prob3 = predictions["prob3"]
+            prob4 = predictions["prob4"]
+            prob5 = predictions["prob5"]
 
+            return render_template('video.html', video_url=video_url, file_name=filename, 
+                one=top1, two=top2, three=top3, four=top4, five=top5,
+                p_one=prob1, p_two=prob2, p_three=prob3, p_four=prob4, p_five=prob5)
+
+        except Exception:
             return render_template('video.html', video_url=video_url)
 
 @app.errorhandler(500)
 def server_error(e):
-    logging.error('An error occurred during a request.')
-    return 'An internal error occurred.', 500
+    logging.error('An error occurred during a request. %s', e)
+    err = "An error occurred during a request." + str(e)
+    return err, 500 # 'An internal error occurred.', 500
