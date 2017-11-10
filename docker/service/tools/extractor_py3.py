@@ -22,12 +22,16 @@ FRAMES_PER_VIDEO = "5"
 FRAME_RATE = "fps=1/1"          # frames per second(s)
 START_TIME = "00:00:00"
 
+def getLength(input_video):
+    duration = subprocess.check_output(['ffprobe', '-i', input_video, '-show_entries', 'format=duration', '-v', 'quiet', '-of', 'csv=%s' % ("p=0")])
+    return duration
+
 def extracted(video):
     vid_frame = re.sub(r'\.\w{3}', '-0001.jpg', video)
     return bool(os.path.exists(vid_frame))
 
 
-def get_frames(video):
+def get_frames(video, url):
     if not video:
         video = VIDEO_PATH
     if extracted(video):
@@ -39,24 +43,26 @@ def get_frames(video):
         frame_output_path = re.sub(r'\.\w{3}', '-%04d.jpg', video)
         
     try:
-        # "-ss", START_TIME, "-filter:v", FRAME_RATE,
-        ret = subprocess.call(["ffmpeg", "-i", video, "-vframes", FRAMES_PER_VIDEO, frame_output_path])
+        duration = getLength(url)
+        frame_dest_name = video
+        ret = subprocess.call(["ffmpeg", "-i", url, "-filter:v", "fps=" + str(float(FRAMES_PER_VIDEO)/float(duration)), "-vframes", FRAMES_PER_VIDEO, frame_output_path])
+        # ret = subprocess.call(["ffmpeg", "-i", video, "-vframes", FRAMES_PER_VIDEO, frame_output_path])
     except Exception:
         pass
 
 
-def extract_features(name):
-    VIDEO_PATH = name + ".avi"
+def extract_features(name, url):
+    VIDEO_PATH = url
     Model = Extractor()
     current_dir = os.getcwd()
     print("Vid name: ", name)
     vid_name = VIDEO_PATH.split('/')
     vid_name= vid_name[len(vid_name) - 1]
-    seq_path = re.sub(r'\.\w{3}', '-features.txt', VIDEO_PATH)
+    seq_path = re.sub(r'\.\w{3}', '-features.txt', name + ".avi")
 
     if not os.path.isfile(seq_path):
-        get_frames(VIDEO_PATH)
-        vid_frame_fmt = re.sub(r'\.\w{3}', '*.jpg', VIDEO_PATH)
+        get_frames(name + ".avi", VIDEO_PATH)
+        vid_frame_fmt = re.sub(r'\.\w{3}', '*.jpg', name + ".avi")
         frames = glob.glob(vid_frame_fmt)
         if len(frames) > SEQ_LENGTH:
             # downsample number of frames to SEQ_LENGTH
