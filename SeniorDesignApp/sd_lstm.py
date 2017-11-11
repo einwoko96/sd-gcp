@@ -62,7 +62,8 @@ def fetch_predictions(vid_url, f):
 
 @app.route('/')
 def root():
-    return render_template('index.html')
+    # return render_template('index.html')
+	return render_template('video.html')
 
 @app.route('/index.html')
 def index():
