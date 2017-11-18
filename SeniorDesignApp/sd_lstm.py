@@ -87,6 +87,7 @@ def predict():
         filename = temp + filename[filename.rfind("."):]
 
         video_url = upload_video_file(vid_stream, filename, content_type)
+        wordcloud_url = current_app.config['WORDCLOUD_URL']
 
         predictions = fetch_predictions(vid_url=video_url, f=filename)
 
@@ -104,7 +105,7 @@ def predict():
             prob5 = predictions["prob5"]
 
             return render_template('video.html', video_url=video_url, file_name=filename, 
-                one=top1, two=top2, three=top3, four=top4, five=top5,
+                one=top1, two=top2, three=top3, four=top4, five=top5, wordcloud_url=wordcloud_url,
                 p_one=prob1, p_two=prob2, p_three=prob3, p_four=prob4, p_five=prob5)
 
         except Exception:
