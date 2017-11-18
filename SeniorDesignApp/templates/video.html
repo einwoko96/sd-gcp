@@ -57,21 +57,21 @@
           
 	      <div class="container">
           {% if video_url %}
-          <h2>Please upload a video.</h2>
+          <h2>Please upload another video.</h2>
           <form id="form" method="post" action="/video" enctype="multipart/form-data" class="btn btn-lg btn-primary">
             <input type="file" name="video" id="video" accept="video/*" />
             <input class="submit-btn" type="submit" value="Submit" />
           </form>
   			  <div class="row">
-  				  <div class="col-sm-5">
+  				  <div class="col-sm-6">
   					  <h2>16:9 Responsive Aspect Ratio</h2>
   					  <div class="embed-responsive embed-responsive-16by9">
   						  <iframe class="embed-responsive-item"
   						    src="{{ video_url }}"></iframe>
   					  </div>
   				  </div>
-            <div class="col-sm-5 col-sm-offset-1">
-              <h2>{{ wordcloud_url }}</h2>
+            <div class="col-sm-6">
+              <h2>Wordcloud of Predictions</h2>
               <div class="embed-responsive embed-responsive-16by9">
                 <iframe class="embed-responsive-item"
                   src="{{ wordcloud_url }}"></iframe>

@@ -12,6 +12,7 @@ import requests
 from flask import current_app, Flask, render_template, request
 from google.appengine.api import images
 from google.appengine.ext import blobstore
+from werkzeug.exceptions import BadRequest
 # from urlgrabber.keepalive import HTTPHandler
 
 app = Flask(__name__)
@@ -84,7 +85,6 @@ def predict():
         filename = temp + filename[filename.rfind("."):]
 
         video_url = upload_video_file(vid_stream, filename, content_type)
-        wordcloud_url = current_app.config['WORDCLOUD_URL']
 
         predictions = fetch_predictions(vid_url=video_url, f=filename)
 
@@ -102,18 +102,20 @@ def predict():
             prob5 = predictions["prob5"]
 
             image = predictions["wordcloud"]
-            image_64_decode = base64.decodestring(image)
-            image_result = open('wordcloud.png', 'wb')
-            image_result.write(image_64_decode)
+            image_64_decode = base64.b64decode(image)
+            # image_result = open('wordcloud.png', 'wb')
+            # image_result.write(image_64_decode)
 
-            wordcloud_url = upload_video_file(image_result.read(), 'wordcloud.png', 'image/png')
+            wordcloud_url = upload_video_file(image_64_decode, 'wordcloud.png', 'image/png')
 
             return render_template('video.html', video_url=video_url, file_name=filename, 
                 one=top1, two=top2, three=top3, four=top4, five=top5, wordcloud_url=wordcloud_url,
                 p_one=prob1, p_two=prob2, p_three=prob3, p_four=prob4, p_five=prob5)
 
-        except Exception:
-            return render_template('video.html', video_url=video_url)
+        except Exception as e:
+            raise BadRequest('An error occurred during processing. %s', e)
+            # logging.error('An error occurred during processing. %s', e)
+            # return render_template('video.html', video_url=video_url)
 
 @app.errorhandler(500)
 def server_error(e):
