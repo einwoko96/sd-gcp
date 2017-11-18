@@ -89,8 +89,10 @@ def pred():
                     'prob1': str(first_prob * 100), 'prob2': str(second_prob * 100), 'prob3': str(third_prob * 100), 
                     'prob4': str(fourth_prob * 100), 'prob5': str(fifth_prob * 100), 'wordcloud': wordcloud_image
                   }
+    preds = predictions.copy()
+    preds.pop('wordcloud')
 
-    current_app.logger.info('Predictions: %s', predictions.copy().pop('wordcloud'))
+    current_app.logger.info('Predictions: %s', preds)
 
     return jsonify(predictions=predictions)
 
