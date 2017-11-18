@@ -1,4 +1,4 @@
-from flask import Flask, current_app, request, jsonify
+from flask import send_file, Flask, current_app, request, jsonify
 import io
 import os
 import sys
@@ -19,15 +19,6 @@ from werkzeug.datastructures import MultiDict
 from predict import download_file_from_google_drive
 
 app = Flask(__name__)
-
-@app.route('/wordcloud', methods=['POST', 'GET'])
-def get_wordcloud():
-    # if request.args.get('type') == '1':
-    #    filename = 'wordcloud.png'
-    # else:
-    #    filename = 'error.gif'
-    filename = 'wordcloud.png'
-    return send_file(filename, mimetype='image/png')
 
 @app.route('/', methods=['POST', 'GET'])
 def pred():
@@ -90,10 +81,13 @@ def pred():
     wordcloud.generate_from_frequencies(frequencies)
     wordcloud.to_file('wordcloud.png')
 
+    with open("wordcloud.png", "rb") as image_file:
+        wordcloud_image = base64.b64encode(image_file.read())
+
     predictions = {
                     'label1': top1, 'label2': top2, 'label3': top3, 'label4': top4, 'label5': top5,
                     'prob1': str(first_prob * 100), 'prob2': str(second_prob * 100), 'prob3': str(third_prob * 100), 
-                    'prob4': str(fourth_prob * 100), 'prob5': str(fifth_prob * 100)
+                    'prob4': str(fourth_prob * 100), 'prob5': str(fifth_prob * 100), 'wordcloud': wordcloud_image
                   }
 
     current_app.logger.info('Predictions: %s', predictions)

@@ -50,11 +50,8 @@ def fetch_predictions(vid_url, f):
     req = requests.post(server_url, data=data, headers={'Content-Type': 'application/json'}, timeout=180)
     predictions = req.json()
 
-    logging.info('Prediction Type 1: %s', type(predictions))
     try:
         predictions = predictions['predictions']
-        logging.info('Prediction Type 2: %s', type(predictions))
-        
     except Exception:
         logging.info('DIDNT WORK')
 
@@ -103,6 +100,13 @@ def predict():
             prob3 = predictions["prob3"]
             prob4 = predictions["prob4"]
             prob5 = predictions["prob5"]
+
+            image = predictions["wordcloud"]
+            image_64_decode = base64.decodestring(image)
+            image_result = open('wordcloud.png', 'wb')
+            image_result.write(image_64_decode)
+
+            wordcloud_url = upload_video_file(image_result.read(), 'wordcloud.png', 'image/png')
 
             return render_template('video.html', video_url=video_url, file_name=filename, 
                 one=top1, two=top2, three=top3, four=top4, five=top5, wordcloud_url=wordcloud_url,
