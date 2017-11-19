@@ -74,7 +74,7 @@ def pred():
     preds[0][np.argmax(preds[0])] = -1
 
     wordcloud = WordCloud(width = 1000, height = 500, min_font_size=None, 
-                relative_scaling=0.65, background_color='white')
+                relative_scaling=0.65, background_color='white', stopwords=[])
     frequencies = dict()
     for i in range(100):
         frequencies[classes[i]] = int(word_count[i] * (10**15))
