@@ -54,7 +54,7 @@
         </div>
 -->
         <div class="col-sm-9 col-sm-offset-0 col-md-10 col-md-offset-0 main">
-          <h1 class="page-header">Display</h1>
+          <h1 class="page-header">Video Classification</h1>
           
 	      <div class="container">
           {% if video_url %}
@@ -65,14 +65,12 @@
           </form>
   			  <div class="row">
   				  <div class="col-sm-6">
-  					  <h2>16:9 Responsive Aspect Ratio</h2>
   					  <div class="embed-responsive embed-responsive-16by9">
   						  <iframe class="embed-responsive-item"
   						    src="{{ video_url }}"></iframe>
   					  </div>
   				  </div>
             <div class="col-sm-6">
-              <h2>Wordcloud of Predictions</h2>
               <div class="embed-responsive embed-responsive-16by9">
                 <iframe class="embed-responsive-item"
                   src="{{ wordcloud_url }}"></iframe>
